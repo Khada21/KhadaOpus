@@ -1,5 +1,4 @@
 
-// handleLoad removed — replaced by handleFileLoad for local video upload
 // ═══════════════ STATE ════════════════
 const DS={bold:false,italic:false,underline:false,font:'Roboto',fontSize:100,textColor:'#ffffff',textAlpha:100,bgColor:'#000000',bgAlpha:60,position:2,customX:null,customY:null,shadowGlow:false,shadowBevel:false,shadowSoft:false,shadowHard:false};
 let subs=[],tracks=[0],selId=null,multi=new Set(),player=null,playing=false,dur=180000,curMs=0,pxS=80,raf=null,drag=null;
@@ -107,7 +106,8 @@ function updUndoRedoBtns(){
 })();
 
 // ═══════════════ LANDING ════════════════
-// File upload entry point — replaces old YouTube URL flow
+let _videoObjectURL = null;
+
 function handleFileLoad(file){
   if(!file) return;
   if(!file.type.startsWith('video/') && !file.type.startsWith('audio/')){
@@ -116,25 +116,95 @@ function handleFileLoad(file){
   }
   if(_videoObjectURL) URL.revokeObjectURL(_videoObjectURL);
   _videoObjectURL = URL.createObjectURL(file);
-
   document.getElementById('proc-bar').classList.add('active');
-  document.getElementById('proc-fill').style.width = '30%';
+  document.getElementById('proc-fill').style.width = '40%';
   document.getElementById('proc-status').textContent = '✧ Loading video…';
-
   setTimeout(()=>{
-    document.getElementById('proc-fill').style.width = '70%';
+    document.getElementById('proc-fill').style.width = '90%';
     document.getElementById('proc-status').textContent = '✦ Preparing timeline…';
     setTimeout(()=>{
-      document.getElementById('proc-fill').style.width = '100%';
       document.getElementById('proc-status').textContent = '( ✧◡✧ ) Ready!';
       const name = file.name.replace(/\.[^.]+$/, '');
-      enterEditor(()=>{
-        init(null);
-        initVideo(_videoObjectURL, name, file);
-      });
-    }, 300);
+      enterEditor(()=>{ init(null); initVideo(_videoObjectURL, name, file); });
+    }, 250);
   }, 300);
 }
+
+function startBlank(){
+  document.getElementById('topbar-title').textContent = 'Untitled Project';
+  enterEditor(()=> init(null));
+}
+
+function enterEditor(cb){
+  document.getElementById('landing').classList.add('out');
+  const ed = document.getElementById('editor');
+  ed.style.opacity = '0';
+  ed.style.display = 'flex';
+  setTimeout(()=>{
+    document.getElementById('landing').style.display = 'none';
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ ed.classList.add('visible'); ed.style.opacity = ''; cb(); }));
+  }, 600);
+}
+
+function dl(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+function togglePlay(){
+  if(player && player._video){
+    if(player._video.paused) player.playVideo();
+    else player.pauseVideo();
+  } else {
+    playing = !playing;
+    document.getElementById('play-icon').textContent = playing ? '⏸' : '▶';
+  }
+}
+
+function skipTime(s){
+  curMs = Math.max(0, Math.min(dur, curMs + s * 1000));
+  if(player && player.seekTo) player.seekTo(curMs / 1000);
+}
+
+function goHome(){
+  subs=[]; tracks=[0]; selId=null; multi=new Set();
+  mirrorEditId=null; fadeEditId=null;
+  Object.keys(_ovPool).forEach(id=>{ if(_ovPool[id].parentNode) _ovPool[id].parentNode.removeChild(_ovPool[id]); delete _ovPool[id]; });
+  Object.keys(_ovStyleCache).forEach(k=> delete _ovStyleCache[k]);
+  if(raf) cancelAnimationFrame(raf); raf=null;
+  playing=false; curMs=0; dur=180000;
+  if(player && player.destroy){ try{ player.destroy(); }catch(e){} }
+  player=null;
+  _waveformPeaks=null;
+  if(_videoObjectURL){ URL.revokeObjectURL(_videoObjectURL); _videoObjectURL=null; }
+  const wc=document.getElementById('tl-wave-canvas'); if(wc) wc.remove();
+  const wlbl=document.getElementById('audio-empty-lbl');
+  if(wlbl){ wlbl.style.display=''; wlbl.textContent='( ✧◡✧ ) upload a video to see waveform'; }
+  const keW=document.getElementById('ke-wave-empty'); if(keW) keW.style.display='';
+  document.removeEventListener('keydown', onKey);
+  document.getElementById('editor').classList.remove('visible');
+  document.getElementById('editor').style.display='none';
+  const l=document.getElementById('landing'); l.style.display='flex'; l.classList.remove('out');
+  document.getElementById('proc-bar').classList.remove('active');
+  document.getElementById('proc-fill').style.width='0';
+  document.getElementById('proc-status').textContent='';
+  document.getElementById('play-icon').textContent='▶';
+  const vid=document.getElementById('yt-player');
+  if(vid && vid.tagName==='VIDEO'){ vid.pause(); vid.removeAttribute('src'); vid.load(); vid.style.display='none'; }
+  document.getElementById('no-video-state').style.display='flex';
+}
+
+// Drag-and-drop on upload zone
+(function(){
+  function setup(){
+    const zone=document.getElementById('upload-drop-zone'); if(!zone) return;
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault(); zone.classList.remove('drag-over');
+      const f=e.dataTransfer.files[0]; if(f) handleFileLoad(f);
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', setup);
+  else setup();
+})();
 
 
 // ═══════════════ INIT ════════════════
@@ -150,8 +220,8 @@ function init(v){
   startRaf();
   document.getElementById('tl-ruler').addEventListener('mousedown',rulerDown);
   document.addEventListener('keydown',onKey);
-  window.addEventListener('resize',()=>{if(pxS<=fitPxS()*1.05){pxS=fitPxS();syncZ();}renderTL();});
-  // Video is loaded separately via handleFileLoad
+  window.addEventListener('resize',()=>{if(pxS<=fitPxS()*1.05){pxS=fitPxS();syncZ();}renderTL();_refreshWave();});
+  // video loaded via initVideo
 }
 function mkSub(s,e,t,tr,ov){return{id:uid(),startMs:s,endMs:e,text:t,track:tr,style:{...DS,...ov}};}
 function loadDemos(){
@@ -170,50 +240,27 @@ function loadDemos(){
 
 
 // ═══════════════ VIDEO PLAYER ════════════════
-// Uses HTML5 <video> element — local file via createObjectURL.
-// Full audio access via Web Audio API for real waveform.
+// HTML5 <video> element — local file via createObjectURL.
+// Real currentTime sync every RAF frame. Real waveform via Web Audio API.
 
-let _videoObjectURL = null;
-let _audioObjectURL = null;
-let _ytSyncTimer = null;
-
-function handleFileLoad(file){
-  if(!file) return;
-  if(_videoObjectURL) URL.revokeObjectURL(_videoObjectURL);
-  _videoObjectURL = URL.createObjectURL(file);
-  document.getElementById('proc-bar').classList.add('active');
-  document.getElementById('proc-fill').style.width = '40%';
-  document.getElementById('proc-status').textContent = '✧ Loading video…';
-  setTimeout(()=>{
-    document.getElementById('proc-fill').style.width = '80%';
-    document.getElementById('proc-status').textContent = '✦ Preparing timeline…';
-    setTimeout(()=>{
-      document.getElementById('proc-fill').style.width = '100%';
-      document.getElementById('proc-status').textContent = '( ✧◡✧ ) Ready!';
-      const name = file.name.replace(/\.[^.]+$/, '');
-      enterEditor(()=>{
-        init(null);
-        initVideo(_videoObjectURL, name, file);
-      });
-    }, 350);
-  }, 350);
-}
+let _waveformPeaks = null;
 
 function initVideo(url, name, file){
   document.getElementById('topbar-title').textContent = name || 'Video';
   document.getElementById('no-video-state').style.display = 'none';
-
   const vid = document.getElementById('yt-player');
   vid.src = url;
   vid.style.display = 'block';
-  vid.volume = (document.getElementById('vol-sl')?.value || 80) / 100;
+  const volSl = document.getElementById('vol-sl');
+  vid.volume = volSl ? +volSl.value / 100 : 0.8;
 
   vid.addEventListener('loadedmetadata', ()=>{
     dur = Math.round(vid.duration * 1000);
     document.getElementById('dur-t').textContent = msToDisp(dur);
     renderTL();
-    // Extract real waveform from the file
-    _extractWaveformFromFile(file || url);
+    // Seek to a tiny offset to force the browser to paint the first frame
+    vid.currentTime = 0.001;
+    _extractWaveform(file || url);
   }, {once: true});
 
   vid.addEventListener('play',  ()=>{ playing = true;  document.getElementById('play-icon').textContent = '⏸'; });
@@ -221,42 +268,149 @@ function initVideo(url, name, file){
   vid.addEventListener('ended', ()=>{ playing = false; document.getElementById('play-icon').textContent = '▶'; });
 
   player = {
-    _video: vid,
-    _v: name,
-    seekTo(s){ vid.currentTime = s; },
-    playVideo(){ vid.play(); },
-    pauseVideo(){ vid.pause(); },
-    getPlayerState(){ return vid.paused ? 2 : 1; },
+    _video:   vid,
+    _v:       name,
+    seekTo(s)    { vid.currentTime = s; },
+    playVideo()  { vid.play().catch(()=>{}); },
+    pauseVideo() { vid.pause(); },
+    setVolume(v) { vid.volume = v / 100; },
     getDuration(){ return vid.duration || 0; },
-    setVolume(v){ vid.volume = v / 100; },
-    destroy(){ vid.pause(); vid.src = ''; vid.style.display = 'none'; }
+    destroy()    { vid.pause(); vid.removeAttribute('src'); vid.load(); vid.style.display = 'none'; }
   };
 }
 
-// onYouTubeIframeAPIReady stub (keep to avoid errors if script tag still loaded)
+// ── Real waveform ──
+async function _extractWaveform(fileOrUrl){
+  const lbl = document.getElementById('audio-empty-lbl');
+  if(lbl) lbl.textContent = '( ✧◡✧ ) Analysing audio…';
+  try {
+    const buf = (fileOrUrl instanceof File)
+      ? await fileOrUrl.arrayBuffer()
+      : await fetch(fileOrUrl).then(r => r.arrayBuffer());
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await actx.decodeAudioData(buf);
+    actx.close();
+    const nc = decoded.numberOfChannels, len = decoded.length;
+    // Store full-resolution mixed samples — peaks built per-pixel at draw time
+    // Downsample to ~1 sample per ms (enough resolution for any zoom level)
+    const sr = decoded.sampleRate;
+    const downsample = Math.max(1, Math.floor(sr / 1000)); // keep ~1000 samples/sec
+    const dlen = Math.ceil(len / downsample);
+    const mix = new Float32Array(dlen);
+    for(let i = 0; i < dlen; i++){
+      let rms = 0;
+      const s = i * downsample, e = Math.min(s + downsample, len);
+      for(let c2 = 0; c2 < nc; c2++){
+        const ch = decoded.getChannelData(c2);
+        for(let j = s; j < e; j++) rms += ch[j] * ch[j];
+      }
+      mix[i] = Math.sqrt(rms / ((e - s) * nc));
+    }
+    _waveformSamples = mix;
+    _waveformPeaks = mix; // keep compat reference
+  } catch(e) {
+    console.warn('Waveform decode failed:', e);
+    _waveformPeaks = _fakePeaks(Math.ceil((dur||180000) / 50));
+  }
+  _drawWaveform();
+  const ke = document.getElementById('ke-wave-empty');
+  if(ke) ke.style.display = 'none';
+  if(typeof karaEditId !== 'undefined' && karaEditId) reDrawKaraWave();
+}
+
+// ─── Waveform ───────────────────────────────────────────────────────────────
+// _waveformSamples: raw Float32Array of mixed-down audio samples (full resolution)
+// _waveformPeaks:   downsampled RMS peaks at 1-per-pixel, recomputed on zoom change
+// This gives a crisp, zoom-accurate waveform that never blurs.
+
+let _waveformSamples = null; // full-res mixed samples
+
+function _fakePeaks(n){
+  const p = new Float32Array(n); let v = 0.4;
+  for(let i = 0; i < n; i++){ v = Math.max(.05, Math.min(1, v+(Math.random()-.5)*.3)); p[i]=v; }
+  return p;
+}
+
+// Build peaks at exactly 1 sample per pixel for the current pxS (zoom level).
+// Each peak = RMS of the audio samples that fall within that pixel's time window.
+function _buildPeaksForZoom(){
+  if(!_waveformSamples || !dur) return null;
+  const totalPx   = Math.ceil(dur / 1000 * pxS); // total canvas pixels at this zoom
+  const totalSamp = _waveformSamples.length;
+  const peaks     = new Float32Array(totalPx);
+  for(let px = 0; px < totalPx; px++){
+    // which samples fall in this pixel?
+    const s = Math.floor(px     / totalPx * totalSamp);
+    const e = Math.ceil((px+1)  / totalPx * totalSamp);
+    let rms = 0, n = 0;
+    for(let i = s; i < e && i < totalSamp; i++){ rms += _waveformSamples[i]*_waveformSamples[i]; n++; }
+    peaks[px] = n > 0 ? Math.sqrt(rms / n) : 0;
+  }
+  // Normalise
+  const mx = Math.max(...peaks, 0.001);
+  for(let i = 0; i < peaks.length; i++) peaks[i] /= mx;
+  return peaks;
+}
+
+function _drawWaveform(){
+  const row = document.getElementById('audio-track'); if(!row || !dur) return;
+  let c = document.getElementById('tl-wave-canvas');
+  if(!c){ c = document.createElement('canvas'); c.id = 'tl-wave-canvas'; row.appendChild(c); }
+  const lbl = document.getElementById('audio-empty-lbl'); if(lbl) lbl.style.display = 'none';
+  _paintWave(c);
+}
+
+// Core paint — always recomputes peaks for current zoom so it's always crisp.
+function _paintWave(canvas){
+  if(!canvas) return;
+  const row = canvas.parentElement; if(!row || !dur) return;
+
+  // Canvas pixel dimensions must exactly match the scroll content width
+  const W = Math.ceil(dur / 1000 * pxS);
+  const H = row.clientHeight || 64;
+  canvas.width  = W;
+  canvas.height = H;
+  // Override any CSS sizing — canvas must be exactly W×H pixels
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // Build per-pixel peaks at current zoom
+  const peaks = _waveformSamples ? _buildPeaksForZoom() : _fakePeaks(W);
+  const mid = H / 2;
+
+  // Draw filled waveform — one vertical bar per pixel (fast & crisp at any zoom)
+  for(let x = 0; x < W; x++){
+    const amp = (peaks[x] || 0) * mid * 0.92;
+    ctx.fillStyle = 'rgba(48,209,88,0.65)';
+    ctx.fillRect(x, mid - amp, 1, amp * 2 || 1);
+  }
+
+  // Dim fill underneath bars
+  ctx.fillStyle = 'rgba(48,209,88,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  for(let x = 0; x < W; x++){
+    const amp = (peaks[x] || 0) * mid * 0.92;
+    ctx.lineTo(x, mid - amp);
+  }
+  ctx.lineTo(W, mid);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Called whenever zoom changes — repaint at new resolution
+function _refreshWave(){
+  const c = document.getElementById('tl-wave-canvas');
+  if(c && (dur > 0)) _paintWave(c);
+}
+
+// Not needed but keep stub to avoid any legacy errors
 window.onYouTubeIframeAPIReady = function(){};
 
 
-function setDurFromInput(val){
-  const parts=val.split(':');
-  if(parts.length===2){dur=(parseInt(parts[0])||0)*60000+(parseFloat(parts[1])||0)*1000;}
-  else if(parts.length===3){dur=(parseInt(parts[0])||0)*3600000+(parseInt(parts[1])||0)*60000+(parseFloat(parts[2])||0)*1000;}
-  document.getElementById('dur-t').textContent=msToDisp(dur);
-  renderTL();
-}
-function togglePlay(){
-  if(player&&player.pauseVideo){
-    if(playing) player.pauseVideo();
-    else player.playVideo();
-  } else {
-    playing = !playing;
-    document.getElementById('play-icon').textContent = playing ? '⏸' : '▶';
-  }
-}
-function skipTime(s){
-  curMs = Math.max(0, Math.min(dur, curMs + s * 1000));
-  if(player&&player.seekTo) player.seekTo(curMs / 1000);
-}
 
 // ═══════════════ RAF + PERFORMANCE ════════════════
 let _previewFps=30, _fpsInterval=1000/30, _lastOvRender=0;
@@ -309,179 +463,148 @@ const posCSS_map={
   9:{top:'8px',right:'5%',left:'auto',bottom:'',transform:'none'}
 };
 
-// ═══════════════ RAF LOOP ════════════════
-let _lastT = 0;
 function startRaf(){
-  if(raf) cancelAnimationFrame(raf);
-  _lastT = performance.now();
-  function loop(now){
-    raf = requestAnimationFrame(loop);
-    const dt = Math.min(now - _lastT, 100);
-    _lastT = now;
+  let last=performance.now();
+  const phEl=document.getElementById('tl-ph');
+  const curTEl=document.getElementById('cur-t');
+  const tcEl=document.getElementById('tl-tc');
+  const scEl=document.getElementById('tl-scroll');
+  const vwrap=document.getElementById('vwrap');
 
-    // Sync curMs from HTML5 video element if available
-    if(player && player._video && !player._video.paused){
-      const ct = player._video.currentTime * 1000;
-      if(isFinite(ct)) curMs = ct;
+  (function loop(now){
+    const dt=now-last;last=now;
+
+    if(player&&player._video){
+      const ct=player._video.currentTime*1000;
+      if(isFinite(ct)) curMs=ct;
     } else if(playing){
-      curMs += dt;
-      if(curMs >= dur){ curMs = dur; playing = false; document.getElementById('play-icon').textContent = '▶'; }
+      curMs+=dt;
+      if(curMs>=dur){curMs=dur;playing=false;document.getElementById('play-icon').textContent='▶';}
     }
 
-    // Throttle overlay rendering to preview fps
-    const ovDue = _fpsInterval <= 0 || (now - _lastOvRender) >= _fpsInterval;
-    if(ovDue){ _lastOvRender = now; renderOverlays(); }
+    // ── Playhead ──
+    const x=ms2x(curMs);
+    phEl.style.transform=`translateX(${x}px)`;
+    if(_justSeeked){scEl&&(scEl.scrollLeft=Math.max(0,x-scEl.clientWidth/2));_justSeeked=false;}
+    else if(scEl&&x>scEl.scrollLeft+scEl.clientWidth*.8){scEl.scrollLeft=x-scEl.clientWidth*.2;}
 
-    // Always update timecode and cursor
-    const curEl = document.getElementById('cur-t');
-    if(curEl) curEl.textContent = msToDisp(curMs);
-    _hlActiveFast();
+    // ── Timecode (always) ──
+    curTEl.textContent=msToDisp(curMs);
+    tcEl.textContent=msToHMS(curMs);
 
-    if(_justSeeked){ const scEl = document.getElementById('tl-scroll'); scEl && (scEl.scrollLeft = Math.max(0, curMs/1000*pxS - scEl.clientWidth/2)); _justSeeked = false; }
-  }
-  raf = requestAnimationFrame(loop);
+    // ── Overlay + hlActive throttled by FPS ──
+    const sinceLastOv=now-_lastOvRender;
+    if(_fpsInterval===0||sinceLastOv>=_fpsInterval){
+      _lastOvRender=now;
+      _updOvFast(vwrap);
+      _hlActiveFast();
+    }
+
+    raf=requestAnimationFrame(loop);
+  })(performance.now());
 }
 
-// ═══════════════ WAVEFORM ════════════════
-// Real waveform from local video/audio file via Web Audio API.
+function _updOvFast(vwrap){
+  const active=subs.filter(s=>curMs>=s.startMs&&curMs<=s.endMs);
+  const activeIds=new Set(active.map(s=>s.id));
 
-let _waveformPeaks = null;
-let _waveformVideoId = null;
+  // Hide divs for subs no longer active
+  Object.keys(_ovPool).forEach(id=>{
+    if(!activeIds.has(id)&&_ovPool[id].parentNode){
+      _ovPool[id].parentNode.removeChild(_ovPool[id]);
+      delete _ovStyleCache[id];
+    }
+  });
 
-async function _extractWaveformFromFile(fileOrUrl){
-  try{
-    const lbl = document.getElementById('audio-empty-lbl');
-    if(lbl) lbl.textContent = '( ✧◡✧ ) Analysing audio…';
+  if(!active.length)return;
+  active.sort((a,b)=>a.track-b.track);
 
-    let arrayBuffer;
-    if(fileOrUrl instanceof File){
-      arrayBuffer = await fileOrUrl.arrayBuffer();
+  active.forEach((s,gi)=>{
+    const el=_getOvEl(s.id);
+    const st=s.style;
+
+    // Append if not in DOM
+    if(!el.parentNode)vwrap.appendChild(el);
+
+    // Update style only if changed
+    const newBase=_getBaseStyle(s,gi);
+    if(newBase)el.style.cssText='position:absolute;pointer-events:none;border-radius:2px;padding:5px 14px;max-width:82%;text-align:center;white-space:pre-wrap;will-change:transform;'+newBase;
+
+    // ── Position — always clear all props first to avoid stale values ──
+    el.style.left=''; el.style.right=''; el.style.top=''; el.style.bottom=''; el.style.transform='';
+    if(s.move&&s.move.keyframes&&s.move.keyframes.length>=2){
+      const subDur=s.endMs-s.startMs;
+      const elapsed=Math.max(0,Math.min(subDur,curMs-s.startMs));
+      const tG=subDur>0?elapsed/subDur:0;
+      const kfs=s.move.keyframes;
+      const segCount=kfs.length-1;
+      const segT=tG*segCount;
+      const segIdx=Math.min(Math.floor(segT),segCount-1);
+      const a=kfs[segIdx],b=kfs[segIdx+1];
+      const et=mvEaseT(segT-segIdx,a.accel||0,a.decel||0,a.ease);
+      const mx=mvBezierPoint(a.x,a.cp1x,b.cp2x,b.x,et);
+      const my=mvBezierPoint(a.y,a.cp1y,b.cp2y,b.y,et);
+      el.style.left=mx.toFixed(2)+'%';
+      el.style.top=my.toFixed(2)+'%';
+      el.style.transform='translate(-50%,-50%)';
+    } else if(st.customX!=null&&st.customY!=null){
+      el.style.left=st.customX+'%';
+      el.style.top=st.customY+'%';
+      el.style.transform='translate(-50%,-50%)';
     } else {
-      const res = await fetch(fileOrUrl);
-      arrayBuffer = await res.arrayBuffer();
+      const pc=posCSS_map[st.position||2]||posCSS_map[2];
+      el.style.left=pc.left||'';
+      el.style.right=pc.right||'';
+      el.style.top=pc.top||'';
+      el.style.bottom=pc.bottom||'';
+      el.style.transform=pc.transform||'';
     }
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-    audioCtx.close();
+    // ── Text / karaoke — only update when needed ──
+    if(hasKaraoke(s)){
+      const kd=s.karaoke,syls=kd.syllables;
+      const elapsed=curMs-s.startMs;
+      const mainColor=ha(st.textColor,st.textAlpha);
+      const preColor=ha(kd.preColor||'#5046EC',kd.preAlpha??100);
+      let cumMs=0,asi=-1;
+      for(let i=0;i<syls.length;i++){if(elapsed>=cumMs&&elapsed<cumMs+syls[i].durMs){asi=i;break;}cumMs+=syls[i].durMs;}
+      if(asi===-1&&elapsed>=cumMs)asi=syls.length;
+      let html='';
+      syls.forEach((syl,i)=>{html+=`<span style="color:${i<=asi?preColor:mainColor}">${escH(syl.text)}</span>`;});
+      el.innerHTML=html;
+    } else {
+      if(el.textContent!==s.text){el.textContent=s.text;}
+    }
+  });
 
-    _waveformPeaks = _extractPeaks(decoded);
-    _drawWaveforms();
-  } catch(e){
-    console.warn('Waveform decode failed:', e);
-    // Fall back to seed-based fake
-    _waveformPeaks = _seedPeaks('x', Math.ceil((dur||180000)/50));
-    _drawWaveforms();
-  }
+  // Render mirror ghosts for active subs that have mirror effect
+  // First remove stale ghosts
+  vwrap.querySelectorAll('.sub-mirror-ghost').forEach(g=>{
+    if(!activeIds.has(g.dataset.mirrorFor))g.remove();
+  });
+  active.forEach(s=>{
+    if(!hasMirror(s))return;
+    // Remove old ghost and redraw (cheap, ghosts are simple)
+    vwrap.querySelectorAll(`.sub-mirror-ghost[data-mirror-for="${s.id}"]`).forEach(g=>g.remove());
+    _renderMirrorOverlay(s,vwrap);
+  });
 }
 
-function _extractPeaks(audioBuffer){
-  // Mix down all channels, extract one RMS peak per 50ms
-  const sampleRate = audioBuffer.sampleRate;
-  const samplesPerPeak = Math.floor(sampleRate * 0.05);
-  const nCh = audioBuffer.numberOfChannels;
-  // Mix channels into one array
-  const len = audioBuffer.length;
-  const mixed = new Float32Array(len);
-  for(let c = 0; c < nCh; c++){
-    const ch = audioBuffer.getChannelData(c);
-    for(let i = 0; i < len; i++) mixed[i] += ch[i] / nCh;
-  }
-  const nPeaks = Math.ceil(len / samplesPerPeak);
-  const peaks = new Float32Array(nPeaks);
-  for(let i = 0; i < nPeaks; i++){
-    let sum = 0;
-    const s = i * samplesPerPeak;
-    const e = Math.min(s + samplesPerPeak, len);
-    for(let j = s; j < e; j++) sum += mixed[j] * mixed[j];
-    peaks[i] = Math.sqrt(sum / (e - s)); // RMS
-  }
-  // Normalise to 0..1
-  const max = Math.max(...peaks, 0.001);
-  return peaks.map(v => Math.min(1, v / max));
+function _hlActiveFast(){
+  subs.forEach(s=>{
+    const el=_blockMap.get(s.id);if(!el)return;
+    const on=curMs>=s.startMs&&curMs<=s.endMs&&s.id!==selId&&!multi.has(s.id);
+    if(on!==el._wasActive){el.classList.toggle('active',on);el._wasActive=on;}
+  });
 }
 
-function _seedPeaks(seed, n){
-  let r = 0;
-  for(let i = 0; i < seed.length; i++) r = (r * 31 + seed.charCodeAt(i)) & 0xfffffff;
-  function rand(){ r = (r * 1664525 + 1013904223) & 0xfffffff; return r / 0xfffffff; }
-  const peaks = new Float32Array(n);
-  let prev = 0.4;
-  for(let i = 0; i < n; i++){
-    prev = Math.max(0.05, Math.min(1, prev + (rand() - 0.5) * 0.35));
-    peaks[i] = prev;
-  }
-  return peaks;
+let _justSeeked=false;
+function updOv(){_updOvFast(document.getElementById('vwrap'));} // compat shim
+function hlActive(){_hlActiveFast();} // compat shim
+function updPH(){
+  const x=ms2x(curMs);
+  document.getElementById('tl-ph').style.transform=`translateX(${x}px)`;
 }
-
-function _drawWaveforms(){
-  _renderTLWave();
-  const waveEmpty = document.getElementById('ke-wave-empty');
-  if(waveEmpty) waveEmpty.style.display = 'none';
-  if(karaEditId) reDrawKaraWave();
-  const lbl = document.getElementById('audio-empty-lbl');
-  if(lbl) lbl.style.display = 'none';
-}
-
-function _drawFakeWaveform(){
-  // Called when video loads before waveform is decoded
-  const lbl = document.getElementById('audio-empty-lbl');
-  if(lbl){ lbl.style.display = 'none'; }
-  let c = document.getElementById('tl-wave-canvas');
-  if(!c){
-    const row = document.getElementById('audio-track');
-    c = document.createElement('canvas');
-    c.id = 'tl-wave-canvas';
-    row.appendChild(c);
-  }
-  _renderTLWave();
-}
-
-function _renderTLWave(){
-  const row = document.getElementById('audio-track');
-  if(!row || !dur) return;
-
-  let canvas = document.getElementById('tl-wave-canvas');
-  if(!canvas){
-    canvas = document.createElement('canvas');
-    canvas.id = 'tl-wave-canvas';
-    row.appendChild(canvas);
-  }
-
-  const W = Math.max(Math.round(dur / 1000 * pxS), row.clientWidth || 300);
-  const H = row.clientHeight || 64;
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-
-  const peaks = _waveformPeaks || _seedPeaks('x', Math.ceil(dur / 50));
-  const mid = H / 2;
-
-  ctx.beginPath();
-  for(let x = 0; x < W; x++){
-    const t = x / W;
-    const pi = Math.min(peaks.length - 1, Math.floor(t * peaks.length));
-    const amp = peaks[pi] * mid * 0.92;
-    if(x === 0) ctx.moveTo(x, mid - amp); else ctx.lineTo(x, mid - amp);
-  }
-  for(let x = W - 1; x >= 0; x--){
-    const t = x / W;
-    const pi = Math.min(peaks.length - 1, Math.floor(t * peaks.length));
-    const amp = peaks[pi] * mid * 0.92;
-    ctx.lineTo(x, mid + amp);
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(48,209,88,0.18)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(48,209,88,0.7)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-function _refreshWave(){
-  if(_waveformPeaks || dur) _renderTLWave();
-}
-
 
 // ═══════════════ TRACKS ════════════════
 // Auto-assign: given a subtitle, find the lowest track where it doesn't overlap anything else
@@ -768,9 +891,9 @@ function getRulerMs(e){
   return Math.max(0,Math.min(dur,x2ms(x)));
 }
 function seekTo(ms){
-  curMs = Math.max(0, Math.min(dur, ms));
-  _justSeeked = true;
-  if(player&&player.seekTo) player.seekTo(curMs / 1000);
+  curMs=Math.max(0,Math.min(dur,ms));
+  _justSeeked=true;
+  if(player&&player.seekTo) player.seekTo(curMs/1000);
 }
 function rulerDown(e){
   e.preventDefault();
@@ -837,8 +960,8 @@ function fitPxS(){
   const w=sc.clientWidth||800;
   return w/(Math.max(dur,60000)/1000);
 }
-function zoomIn(){pxS=Math.min(pxS*1.5,400);syncZ();renderTL();}
-function zoomOut(){pxS=Math.max(pxS/1.5,fitPxS());syncZ();renderTL();}
+function zoomIn(){pxS=Math.min(pxS*1.5,400);syncZ();renderTL();_refreshWave();}
+function zoomOut(){pxS=Math.max(pxS/1.5,fitPxS());syncZ();renderTL();_refreshWave();}
 function handleZoom(v){
   const minPx=fitPxS();
   pxS=minPx*Math.pow(400/minPx,v/100);
@@ -1379,7 +1502,7 @@ function closeKaraEditor(){
   renderBlocks();
 }
 
-// ── Draw syllable color bands + waveform overlay ──
+// ── Draw syllable color bands only (no fake waveform) ──
 function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
@@ -1416,34 +1539,23 @@ function reDrawKaraWave(){
     px+=w;
   });
 
-  // Waveform overlay — use real peaks if available, else seeded fake
-  {
-    const sub2=subs.find(s=>s.id===karaEditId);
-    const subStartMs=sub2?sub2.startMs:0;
-    const subEndMs=sub2?sub2.endMs:2000;
-    const subDurMs=Math.max(1,subEndMs-subStartMs);
-    const allPeaks=_waveformPeaks||_seedPeaks(_waveformVideoId||'x',Math.ceil((dur||180000)/50));
-    // Slice peaks to just the subtitle window
-    const peakPerMs=allPeaks.length/(dur||180000);
-    const pStart=Math.floor(subStartMs*peakPerMs);
-    const pEnd=Math.min(allPeaks.length,Math.ceil(subEndMs*peakPerMs));
-    const kPeaks=allPeaks.slice(pStart,pEnd);
+  // Waveform overlay — per-pixel accurate from raw samples
+  if(_waveformSamples && dur > 0 && sub){
+    const subStartMs=sub.startMs, subEndMs=sub.endMs;
+    const totalSamp=_waveformSamples.length;
     const mid2=H/2;
-    ctx.save();
-    ctx.globalAlpha=0.4;
-    ctx.beginPath();
+    ctx.save(); ctx.globalAlpha=0.5;
     for(let x=0;x<W;x++){
-      const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
-      const amp=(kPeaks[pi]||0)*mid2*0.85;
-      if(x===0)ctx.moveTo(x,mid2-amp); else ctx.lineTo(x,mid2-amp);
+      const tMs=subStartMs+(x/W)*(subEndMs-subStartMs);
+      const tMsNext=subStartMs+((x+1)/W)*(subEndMs-subStartMs);
+      const s=Math.floor(tMs/dur*totalSamp);
+      const e2=Math.min(totalSamp,Math.ceil(tMsNext/dur*totalSamp));
+      let rms=0,n=0;
+      for(let i2=s;i2<e2;i2++){rms+=_waveformSamples[i2]*_waveformSamples[i2];n++;}
+      const amp=n>0?Math.sqrt(rms/n)*mid2*0.88:0;
+      ctx.fillStyle='rgba(255,255,255,0.7)';
+      ctx.fillRect(x,mid2-amp,1,amp*2||1);
     }
-    for(let x=W-1;x>=0;x--){
-      const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
-      const amp=(kPeaks[pi]||0)*mid2*0.85;
-      ctx.lineTo(x,mid2+amp);
-    }
-    ctx.closePath();
-    ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fill();
     ctx.restore();
   }
 
@@ -3722,22 +3834,4 @@ function fadeSetOut(v){
       return msg;
     }
   });
-})();
-
-// ── Drop zone drag & drop ──
-(function(){
-  function ready(){
-    const zone = document.getElementById('upload-drop-zone');
-    if(!zone) return;
-    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
-    zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
-    zone.addEventListener('drop', e=>{
-      e.preventDefault();
-      zone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if(file) handleFileLoad(file);
-    });
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ready);
-  else ready();
 })();
