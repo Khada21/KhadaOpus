@@ -1258,8 +1258,16 @@ function onDrag(e){
       newStart=snappedEnd-dur2;
     }
     newStart=Math.max(0,newStart);
+    const deltaMs=newStart-s.startMs;
     s.startMs=newStart;
     s.endMs=newStart+dur2;
+    // If compound block, shift all child timings by the same delta
+    if(s._compound&&s._compound.length){
+      s._compound.forEach(child=>{
+        child.startMs+=deltaMs;
+        child.endMs+=deltaMs;
+      });
+    }
     // Auto-assign track
     const best=autoAssignTrack(s);
     if(best!==s.track){
@@ -1268,6 +1276,7 @@ function onDrag(e){
       syncTracks();rebuildSidebar();renderTL();
     }
   }else{
+    const prevStart=s.startMs, prevEnd=s.endMs;
     if(drag.side==='l'){
       let ns=Math.max(0,drag.oS+dms);
       ns=applySnapMagnet(ns,s.id,'start');
@@ -1276,6 +1285,18 @@ function onDrag(e){
       let ne=Math.max(s.startMs+200,drag.oE+dms);
       ne=applySnapMagnet(ne,s.id,'end');
       s.endMs=ne;
+    }
+    // If compound block, rescale all child timings proportionally
+    if(s._compound&&s._compound.length){
+      const origDur=drag.oE-drag.oS; // original total duration
+      const newDur=s.endMs-s.startMs;
+      const origStart=drag.oS;
+      s._compound.forEach(child=>{
+        const relStart=child.startMs-origStart;
+        const relEnd=child.endMs-origStart;
+        child.startMs=Math.round(s.startMs+(relStart/origDur)*newDur);
+        child.endMs=Math.round(s.startMs+(relEnd/origDur)*newDur);
+      });
     }
     const best=autoAssignTrack(s);
     if(best!==s.track){
@@ -1939,23 +1960,32 @@ function removeKaraokeFromSub(sub){
   renderBlocks();renderSL();closeKaraEditor();
 }
 
-// ── Space: preview-play selected syllable ──
+// ── Numpad 0 / Play Syllable button ──
 function karaPlaySyllable(){
   const sub=subs.find(s=>s.id===karaEditId);
   if(!sub||!sub.karaoke||karaSelSyl===null)return;
   const syls=sub.karaoke.syllables;
-  // Compute start offset of this syllable within the subtitle
+  // Compute absolute start time of this syllable
   let offsetMs=sub.startMs;
   for(let i=0;i<karaSelSyl;i++)offsetMs+=syls[i].durMs;
   const durMs=syls[karaSelSyl].durMs;
-  // Seek and play for durMs
-  curMs=offsetMs;playing=true;
-  document.getElementById('play-icon').textContent='⏸';
-  if(karaSylTimer)clearTimeout(karaSylTimer);
-  karaSylTimer=setTimeout(()=>{
-    playing=false;document.getElementById('play-icon').textContent='▶';
-    karaSylTimer=null;
-  },durMs);
+  // Seek and play for durMs, supporting real video player
+  if(karaSylTimer){clearTimeout(karaSylTimer);karaSylTimer=null;}
+  if(player&&player._video){
+    player._video.currentTime=offsetMs/1000;
+    player.playVideo();
+    karaSylTimer=setTimeout(()=>{
+      player.pauseVideo();
+      karaSylTimer=null;
+    },durMs);
+  } else {
+    curMs=offsetMs;playing=true;
+    document.getElementById('play-icon').textContent='⏸';
+    karaSylTimer=setTimeout(()=>{
+      playing=false;document.getElementById('play-icon').textContent='▶';
+      karaSylTimer=null;
+    },durMs);
+  }
 }
 
 // ── Open / Close ──
@@ -4416,44 +4446,52 @@ function fadeSetOut(v){
 
 // ═══════════════ BLOCK LOOP / NAVIGATION (SPACE + ARROWS) ═══════════════
 let _blockLoopTimer = null;
-let _blockLooping = false;
+let _blockPlaying = false; // true while a block is being played
 
 function loopSelectedBlock(){
   const sub = subs.find(s=>s.id===selId);
   if(!sub) return;
-  _startBlockLoop(sub);
+  _startBlockPlay(sub);
 }
 
-function _startBlockLoop(sub){
+function _startBlockPlay(sub){
+  // Always (re)start from the beginning of the block
   if(_blockLoopTimer){ clearTimeout(_blockLoopTimer); _blockLoopTimer=null; }
   const dur2 = sub.endMs - sub.startMs;
-  seekTo(sub.startMs);
-  // If real video player, use it; otherwise use internal playing flag
+  // Seek to block start
   if(player && player._video){
     player._video.currentTime = sub.startMs/1000;
     player.playVideo();
   } else {
+    curMs = sub.startMs;
     playing = true;
     document.getElementById('play-icon').textContent = '⏸';
   }
-  _blockLooping = true;
+  _blockPlaying = true;
   document.getElementById('btn-loop-block')?.classList.add('active');
+  // Stop at block end — leave playhead there, don't loop
   _blockLoopTimer = setTimeout(()=>{
-    _stopBlockLoop();
+    _stopBlockPlay(sub.endMs);
   }, dur2);
 }
 
-function _stopBlockLoop(){
-  _blockLooping = false;
+function _stopBlockPlay(stopAtMs){
+  _blockPlaying = false;
   if(_blockLoopTimer){ clearTimeout(_blockLoopTimer); _blockLoopTimer=null; }
   if(player && player._video){
     player.pauseVideo();
+    if(stopAtMs !== undefined) player._video.currentTime = stopAtMs/1000;
   } else {
     playing = false;
     document.getElementById('play-icon').textContent = '▶';
+    if(stopAtMs !== undefined) curMs = stopAtMs;
   }
   document.getElementById('btn-loop-block')?.classList.remove('active');
 }
+
+// Keep old name as alias for context-menu "Play This Block"
+function _startBlockLoop(sub){ _startBlockPlay(sub); }
+function _stopBlockLoop(){ _stopBlockPlay(); }
 
 function navBlock(dir){
   // Navigate previous (-1) or next (1) block
@@ -4493,6 +4531,13 @@ onKey = function(e){
   if(t==='TEXTAREA'||t==='INPUT') return;
   const k = keyEventToString(e);
 
+  // Numpad 0: play selected syllable in karaoke edit mode
+  if(e.code==='Numpad0' && karaEditId && karaSelSyl!==null){
+    e.preventDefault();
+    karaPlaySyllable();
+    return;
+  }
+
   // Arrow navigation (always, unless inside an input)
   if(k==='arrowleft'||k==='arrowup'){
     e.preventDefault();
@@ -4505,18 +4550,14 @@ onKey = function(e){
     navBlock(1); return;
   }
 
-  // Space: if a block is selected (and not editing karaoke), loop that block
+  // Space: if a block is selected (and not editing karaoke), play that block from start
   if(keybinds['play']===k){
     e.preventDefault();
     if(karaEditId && karaSelSyl!==null){
       karaPlaySyllable();
     } else if(selId && !karaEditId){
-      // If already looping, stop; else start loop
-      if(_blockLooping){
-        _stopBlockLoop();
-      } else {
-        loopSelectedBlock();
-      }
+      // Always (re)start playback from beginning of the selected block
+      loopSelectedBlock();
     } else {
       // No block selected — plain play/pause
       togglePlay();
@@ -4640,9 +4681,15 @@ function showBlockCtxMenu(e, subId){
   menu.style.top = y + 'px';
   menu.style.display = 'block';
 
-  // Close on outside click
+  // Close on outside click — ignore clicks that land on the menu itself
   setTimeout(()=>{
-    document.addEventListener('mousedown', closeCtxMenu, {once:true});
+    function outsideClose(ev){
+      if(!ev.target.closest('#block-ctx-menu')){
+        closeCtxMenu();
+        document.removeEventListener('mousedown', outsideClose);
+      }
+    }
+    document.addEventListener('mousedown', outsideClose);
   }, 10);
 
   // Reposition after render
@@ -4734,9 +4781,6 @@ function demergeCompoundBlock(id){
 const _rbForCompound = renderBlocks;
 renderBlocks = function(){
   _rbForCompound.apply(this, arguments);
-  // Update compound button disabled state (multi-select can change via box-select too)
-  const cBtn = document.getElementById('btn-make-compound');
-  if(cBtn) cBtn.disabled = multi.size < 2;
   subs.forEach(sub=>{
     if(!sub._compound||!sub._compound.length) return;
     const el = document.querySelector(`.sub-block[data-id="${sub.id}"]`);
@@ -4947,20 +4991,11 @@ renderBlocks = function(){
 // ── Save/load: include reverse + compound ──
 // (All new fields are included directly in the source functions above)
 
-// ═══════════════ UPDATE COMPOUND BUTTON ON SELECTION ═══════════════
-// Update compound button whenever selection changes
-const _origSelSub = selSub;
-selSub = function(id, shift){
-  _origSelSub(id, shift);
-  const cBtn = document.getElementById('btn-make-compound');
-  if(cBtn) cBtn.disabled = multi.size < 2;
-};
-
 // ═══════════════ STOP BLOCK LOOP ON SELECTION CHANGE ═══════════════
 const _origSelSubForLoop = selSub;
 selSub = function(id, shift){
   _origSelSubForLoop(id, shift);
-  if(_blockLooping) _stopBlockLoop();
+  if(_blockPlaying) _stopBlockPlay();
 };
 
 // ═══════════════ INIT PATCH: hook resize for reverse editor ═══════════════
