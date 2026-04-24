@@ -3885,7 +3885,8 @@ buildYTT=function(sorted){
     wpsXml+=`<wp id="${id}" ap="${ap}" ah="${ah}" av="${av}" />`;
   });
   const bodyXml=lines.join('\n');
-  return `<?xml version="1.0" encoding="utf-8"?><timedtext format="3"><head>${pensXml}${wsXml}${wpsXml}</head><body>${bodyXml}</body></timedtext>`;
+  const _rawYtt=`<?xml version="1.0" encoding="utf-8"?><timedtext format="3"><head>${pensXml}${wsXml}${wpsXml}</head><body>${bodyXml}</body></timedtext>`;
+  return _wrapYTTWithSig(_rawYtt);
 };
 
 
