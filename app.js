@@ -1036,7 +1036,7 @@ function _updOvFast(vwrap){
       const subDur=s.endMs-s.startMs;
       const elapsed=Math.max(0,Math.min(subDur,curMs-s.startMs));
       const tG=subDur>0?elapsed/subDur:0;
-      const kfs=s.move.keyframes;
+      const kfs=(s.reverse&&s.reverse.motion)?[...s.move.keyframes].reverse():s.move.keyframes;
       const segCount=kfs.length-1;
       const segT=tG*segCount;
       const segIdx=Math.min(Math.floor(segT),segCount-1);
@@ -1720,8 +1720,8 @@ function closeExport(){document.getElementById('exp-modal').classList.remove('op
 function doExport(fmt){
   const sorted=[...subs].sort((a,b)=>a.startMs-b.startMs);
   let content='';
-  if(fmt==='srt')content=sorted.map((s,i)=>`${i+1}\n${msSRT(s.startMs)} --> ${msSRT(s.endMs)}\n${s.text}\n`).join('\n');
-  else if(fmt==='vtt')content='WEBVTT\n\n'+sorted.map((s,i)=>`${i+1}\n${msVTT(s.startMs)} --> ${msVTT(s.endMs)}\n${s.text}\n`).join('\n');
+  if(fmt==='srt')content=sorted.map((s,i)=>`${i+1}\n${msSRT(s.startMs)} --> ${msSRT(s.endMs)}\n${_getDisplayText(s)}\n`).join('\n');
+  else if(fmt==='vtt')content='WEBVTT\n\n'+sorted.map((s,i)=>`${i+1}\n${msVTT(s.startMs)} --> ${msVTT(s.endMs)}\n${_getDisplayText(s)}\n`).join('\n');
   else content=buildYTT(sorted);
 
   // Try Blob download first, fall back to data: URI, fall back to copy modal
@@ -1855,8 +1855,9 @@ function buildYTT(sorted){
     const mainPenId=penIndex.get(mainKey)??0;
 
     if(!hasKaraoke(s)){
-      // Plain subtitle
-      lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"${fad}><s p="${mainPenId}">${escX(s.text)}</s></p>`);
+      // Plain subtitle — use _getDisplayText for reverse.text support
+      const displayTxt=_getDisplayText(s);
+      lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"${fad}><s p="${mainPenId}">${escX(displayTxt)}</s></p>`);
       return;
     }
 
@@ -1865,10 +1866,12 @@ function buildYTT(sorted){
     // Each <p> shows the full line with sung portion in preColor and unsung in mainColor.
     // This is achieved by two <s> spans: <s p="prePen">sung_part</s><s p="mainPen">unsung_part</s>
     const kd=s.karaoke;
-    const syls=kd.syllables;
+    // reverse.timing: play syllables in reverse order
+    const revTiming=s.reverse&&s.reverse.timing;
+    const rawSyls=kd.syllables;
+    const syls=revTiming?[...rawSyls].reverse():rawSyls;
     const preKey=JSON.stringify({...s.style,_fc:kd.preColor||'#5046EC',_fo:kd.preAlpha!==undefined?kd.preAlpha:100});
     const prePenId=penIndex.get(preKey)??0;
-    const fullText=syls.map(sv=>sv.text).join('');
 
     // Emit one <p> per syllable transition: at time = start of syl[i], show syls[0..i] in pre-color, rest in main
     let cumMs=0;
@@ -3559,7 +3562,7 @@ buildYTT=function(sorted){
     const totalDur=Math.max(1,s.endMs-s.startMs);
     const exportFps=s.move.exportFps||100;
     const numSamples=Math.max(2,Math.ceil(totalDur/(1000/exportFps)));
-    const kfs=s.move.keyframes;
+    const kfs=(s.reverse&&s.reverse.motion)?[...s.move.keyframes].reverse():s.move.keyframes;
     const axis=hasMirror(s)?s.mirror.axis||'x':null;
     const ox=hasMirror(s)?s.mirror.offsetX||0:0;
     const oy=hasMirror(s)?s.mirror.offsetY||0:0;
@@ -3594,13 +3597,17 @@ buildYTT=function(sorted){
     const mainPenId=penIndex.get(mainKey)??0;
     const fadeIn=hasFade(s)?(s.fade.inMs||0):0;
     const fadeOut=hasFade(s)?(s.fade.outMs||0):0;
+    // Reverse effect flags
+    const revMotion=s.reverse&&s.reverse.motion;
+    const revTiming=s.reverse&&s.reverse.timing;
+    const displayText=_getDisplayText(s); // handles reverse.text
 
     if(hasMove(s)){
       const totalDur=Math.max(1,s.endMs-s.startMs);
       const exportFps=s.move.exportFps||100;
       const SAMPLE_MS=Math.round(1000/exportFps); // high-res sampling interval
       const numSamples=Math.max(2,Math.ceil(totalDur/SAMPLE_MS));
-      const kfs=s.move.keyframes;
+      const kfs=revMotion?[...s.move.keyframes].reverse():s.move.keyframes;
 
       // Sample bezier at normalized t → {ah,av} rounded integers
       function posAtT(t){
@@ -3617,7 +3624,8 @@ buildYTT=function(sorted){
       }
 
       if(hasKaraoke(s)){
-        const kd=s.karaoke;const syls=kd.syllables;
+        const kd=s.karaoke;
+        const syls=revTiming?[...kd.syllables].reverse():kd.syllables;
         const preKey=JSON.stringify({...s.style,_fc:kd.preColor||'#5046EC',_fo:kd.preAlpha!==undefined?kd.preAlpha:100});
         const prePenId=penIndex.get(preKey)??0;
         // Fade-in: emit stepped frames at start position using full-line text
@@ -3697,7 +3705,7 @@ buildYTT=function(sorted){
           let t = s.startMs;
           for (const step of inStepsMv) {
             const fpid = getFadePenId(mainKey, step.fo);
-            lines.push(`<p t="${t}" d="${step.ms}" wp="${startWpId}" ws="1"><s p="${fpid}">${escX2(s.text)}</s></p>`);
+            lines.push(`<p t="${t}" d="${step.ms}" wp="${startWpId}" ws="1"><s p="${fpid}">${escX2(displayText)}</s></p>`);
             t += step.ms;
           }
           moveStart = t;
@@ -3721,7 +3729,7 @@ buildYTT=function(sorted){
 
           if (wp !== pendingWp || isLast) {
             const d = Math.max(1, (isLast ? moveEnd : tMs) - pendingStart);
-            if (d > 0) lines.push(`<p t="${pendingStart}" d="${d}" wp="${pendingWp}" ws="1"><s p="${mainPenId}">${escX2(s.text)}</s></p>`);
+            if (d > 0) lines.push(`<p t="${pendingStart}" d="${d}" wp="${pendingWp}" ws="1"><s p="${mainPenId}">${escX2(displayText)}</s></p>`);
             pendingStart = isLast ? moveEnd : tMs;
             pendingWp = wp;
             if (isLast) break;
@@ -3735,7 +3743,7 @@ buildYTT=function(sorted){
           for (const step of outStepsMv) {
             if (t + step.ms > s.endMs) break;
             const fpid = getFadePenId(mainKey, step.fo);
-            lines.push(`<p t="${t}" d="${step.ms}" wp="${endWpId}" ws="1"><s p="${fpid}">${escX2(s.text)}</s></p>`);
+            lines.push(`<p t="${t}" d="${step.ms}" wp="${endWpId}" ws="1"><s p="${fpid}">${escX2(displayText)}</s></p>`);
             t += step.ms;
           }
         }
@@ -3750,21 +3758,23 @@ buildYTT=function(sorted){
     const subDur=Math.max(1,s.endMs-s.startMs);
 
     if(!hasKaraoke(s)){
-      // Simple static subtitle — emit with stepped fade
+      // Simple static subtitle — emit with stepped fade, using displayText for reverse.text
       if(fadeIn>0||fadeOut>0){
-        const mainStart=emitFadeIn(s,mainPenId,mainKey,wpId,'0',s.text,fadeIn,lines);
-        emitWithFadeOut(s,mainPenId,mainKey,wpId,'0',s.text,fadeOut,mainStart,lines);
+        const mainStart=emitFadeIn(s,mainPenId,mainKey,wpId,'0',displayText,fadeIn,lines);
+        emitWithFadeOut(s,mainPenId,mainKey,wpId,'0',displayText,fadeOut,mainStart,lines);
       } else {
-        lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"><s p="${mainPenId}">${escX2(s.text)}</s></p>`);
+        lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"><s p="${mainPenId}">${escX2(displayText)}</s></p>`);
       }
       return;
     }
-    // Karaoke — emit syllable frames (fade on karaoke: apply fade to first/last syllable timing)
-    const kd=s.karaoke;const syls=kd.syllables;
+    // Karaoke — emit syllable frames; reverse syllable order if reverse.timing is set
+    const kd=s.karaoke;
+    const rawSyls=kd.syllables;
+    const syls=revTiming?[...rawSyls].reverse():rawSyls;
     const preKey=JSON.stringify({...s.style,_fc:kd.preColor||'#5046EC',_fo:kd.preAlpha!==undefined?kd.preAlpha:100});
     const prePenId=penIndex.get(preKey)??0;
     // Fade-in pre-frames before first syllable
-    if(fadeIn>0) emitFadeIn(s,mainPenId,mainKey,wpId,'0',s.text,fadeIn,lines);
+    if(fadeIn>0) emitFadeIn(s,mainPenId,mainKey,wpId,'0',displayText,fadeIn,lines);
     let cumMs=0;
     syls.forEach((syl,i)=>{
       const tStart=s.startMs+cumMs;
@@ -3805,6 +3815,8 @@ buildYTT=function(sorted){
     const fadeIn=hasFade(s)?(s.fade.inMs||0):0;
     const fadeOut=hasFade(s)?(s.fade.outMs||0):0;
     const mainKey=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:s.style.textAlpha});
+    const mirDisplayText=_getDisplayText(s); // handles reverse.text for ghost frames
+    const mirRevMotion=s.reverse&&s.reverse.motion;
 
     // Ghost pens
     const ghostTextAlpha=Math.round((s.style.textAlpha||100)*opacityFrac);
@@ -3827,7 +3839,7 @@ buildYTT=function(sorted){
       // Mirror has move: high-res sample, emit only on position change
       const exportFps=s.move.exportFps||100;
       const numSamples=Math.max(2,Math.ceil(subDur/(1000/exportFps)));
-      const kfs=s.move.keyframes;
+      const kfs=mirRevMotion?[...s.move.keyframes].reverse():s.move.keyframes;
 
       function mirPosAtT(t){
         t=Math.max(0,Math.min(1,t));
@@ -3925,7 +3937,7 @@ buildYTT=function(sorted){
             const foPercent=Math.round(fadeFo/254*100);
             const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:foPercent,bgAlpha:ghostBgAlpha});
             getPenId(k);const gfpid=penIndex.get(k)??ghostPenId;
-            lines.push(`<p t="${t}" d="${step.ms}" wp="${startWpId}" ws="1"><s p="${gfpid}">${escX2(s.text)}</s></p>`);
+            lines.push(`<p t="${t}" d="${step.ms}" wp="${startWpId}" ws="1"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);
             t+=step.ms;
           }
           mirMoveStart=t;
@@ -3941,7 +3953,7 @@ buildYTT=function(sorted){
           const wp=isLast?mirPosAtT(Math.min(1,(mirMoveEnd-s.startMs)/subDur)):(i<numSamples?mirPosAtT(t):mirPosAtT(1));
           if(wp!==pendingWp||isLast){
             const d=Math.max(1,(isLast?mirMoveEnd:tMs)-pendingStart);
-            if(d>0)lines.push(`<p t="${pendingStart}" d="${d}" wp="${pendingWp}" ws="1"><s p="${ghostPenId}">${escX2(s.text)}</s></p>`);
+            if(d>0)lines.push(`<p t="${pendingStart}" d="${d}" wp="${pendingWp}" ws="1"><s p="${ghostPenId}">${escX2(mirDisplayText)}</s></p>`);
             pendingStart=isLast?mirMoveEnd:tMs;
             pendingWp=wp;
             if(isLast)break;
@@ -3957,7 +3969,7 @@ buildYTT=function(sorted){
             const foPercent=Math.round(fadeFo/254*100);
             const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:foPercent,bgAlpha:ghostBgAlpha});
             getPenId(k);const gfpid=penIndex.get(k)??ghostPenId;
-            lines.push(`<p t="${t}" d="${step.ms}" wp="${endWpId}" ws="1"><s p="${gfpid}">${escX2(s.text)}</s></p>`);
+            lines.push(`<p t="${t}" d="${step.ms}" wp="${endWpId}" ws="1"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);
             t+=step.ms;
           }
         }
@@ -4039,25 +4051,25 @@ buildYTT=function(sorted){
             let t = s.startMs;
             for (const step of inStepsMir) {
               const gfpid = getGhostFadePen(step.fo);
-              lines.push(`<p t="${t}" d="${step.ms}" wp="${ghostWpId}" ws="0"><s p="${gfpid}">${escX2(s.text)}</s></p>`);
+              lines.push(`<p t="${t}" d="${step.ms}" wp="${ghostWpId}" ws="0"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);
               t += step.ms;
             }
             gMainStart = t;
           }
           const gFadeOutStart = (fadeOut > 0) ? Math.max(gMainStart, s.endMs - fadeOut) : s.endMs;
           const gMainD = Math.max(1, gFadeOutStart - gMainStart);
-          lines.push(`<p t="${gMainStart}" d="${gMainD}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(s.text)}</s></p>`);
+          lines.push(`<p t="${gMainStart}" d="${gMainD}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(mirDisplayText)}</s></p>`);
           if (fadeOut > 0) {
             let t = gFadeOutStart;
             for (const step of outStepsMir) {
               if (t + step.ms > s.endMs) break;
               const gfpid = getGhostFadePen(step.fo);
-              lines.push(`<p t="${t}" d="${step.ms}" wp="${ghostWpId}" ws="0"><s p="${gfpid}">${escX2(s.text)}</s></p>`);
+              lines.push(`<p t="${t}" d="${step.ms}" wp="${ghostWpId}" ws="0"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);
               t += step.ms;
             }
           }
         } else {
-          lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(s.text)}</s></p>`);
+          lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(mirDisplayText)}</s></p>`);
         }
       }
     }
@@ -4343,7 +4355,7 @@ function _renderMirrorOverlay(s,vwrap){
     const subDur=s.endMs-s.startMs;
     const elapsed=Math.max(0,Math.min(subDur,curMs-s.startMs));
     const tG=subDur>0?elapsed/subDur:0;
-    const kfs=s.move.keyframes;
+    const kfs=(s.reverse&&s.reverse.motion)?[...s.move.keyframes].reverse():s.move.keyframes;
     const segCount=kfs.length-1;
     const segT=tG*segCount;
     const segIdx=Math.min(Math.floor(segT),segCount-1);
