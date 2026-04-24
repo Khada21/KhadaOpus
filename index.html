@@ -132,7 +132,25 @@
                 <div class="fx-card-desc">Reflected ghost copy</div>
               </div>
             </div>
+            <div class="fx-card" id="fx-reverse-card" draggable="true" title="Drag onto a subtitle block to add reverse effect">
+              <div class="fx-card-icon" style="color:#ff6b6b;background:rgba(255,107,107,.15);border-color:rgba(255,107,107,.4)">
+                <svg width="16" height="14" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 4 L22 4 L22 16 L2 16 Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <text x="12" y="13.5" text-anchor="middle" fill="currentColor" font-size="9" font-weight="bold" font-family="monospace">REV</text>
+                  <path d="M5 1 L2 4 L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+              </div>
+              <div class="fx-card-info">
+                <div class="fx-card-name">Reverse</div>
+                <div class="fx-card-desc">Reverse motion, font, or both</div>
+              </div>
+            </div>
             <div class="fx-drag-hint">✧ Drag onto a subtitle block</div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-top:12px;margin-bottom:8px">Multi-Block</div>
+            <button class="fx-compound-btn" id="btn-make-compound" onclick="makeCompoundBlock()" title="Select multiple blocks then click to merge into a Compound Block" disabled>
+              <svg width="14" height="12" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="1" width="9" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="1" y="11" width="9" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="11" width="9" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M10 5 L14 5 M10 15 L14 15 M12 5 L12 15" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1.5"/></svg>
+              Make Compound
+            </button>
           </div>
         </div>
         <!-- Horizontal resize: effects ↔ video -->
@@ -151,9 +169,18 @@
         </div>
       </div>
       <div class="video-controls" style="flex-shrink:0">
+        <button class="vc-btn" id="btn-prev-block" onclick="navBlock(-1)" data-tip="Previous block (← Arrow)" title="Select previous subtitle block">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
         <button class="vc-btn vc-play" id="play-btn" onclick="togglePlay()" data-tip="Play / Pause" data-tipkey-id="tip-play-key"><span id="play-icon">▶</span></button>
+        <button class="vc-btn" id="btn-next-block" onclick="navBlock(1)" data-tip="Next block (→ Arrow)" title="Select next subtitle block">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
         <button class="vc-btn" onclick="skipTime(-5)" data-tip="Skip back 5s" data-tipkey-id="tip-skip-back-key">«</button>
         <button class="vc-btn" onclick="skipTime(5)" data-tip="Skip forward 5s" data-tipkey-id="tip-skip-fwd-key">»</button>
+        <button class="vc-btn" id="btn-loop-block" onclick="loopSelectedBlock()" data-tip="Loop selected block (Space when block selected)" title="Play &amp; loop the selected subtitle block" style="font-size:9px;letter-spacing:.5px;padding:0 7px;color:var(--text3)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
         <div class="timecode"><span id="cur-t">0:00.000</span><span style="color:var(--text3)"> / </span><span id="dur-t">3:00</span></div>
         <div style="flex:1"></div>
         <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text3)">
@@ -392,6 +419,20 @@
           <div class="ke-spacer"></div>
           <!-- Action toolbar at the very bottom -->
           <div class="ke-bottom-toolbar">
+            <div class="ke-nav-row">
+              <button class="ke-nav-btn" onclick="karNavSyl(-1)" title="Previous syllable (← Arrow)">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Prev
+              </button>
+              <button class="ke-play-syl-btn" onclick="karaPlaySyllable()" title="Play this syllable (Space)">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                Play Syllable
+              </button>
+              <button class="ke-nav-btn" onclick="karNavSyl(1)" title="Next syllable (→ Arrow)">
+                Next
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
             <div class="ke-btn-row">
               <button class="ke-tbtn" onclick="karaSplitAtCursor()" title="Split selected syllable in half">✂ Split</button>
               <button class="ke-tbtn" onclick="karaJoinSel()" title="Join selected with next">⊞ Join</button>
@@ -527,6 +568,63 @@
         </div>
         <div style="padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0">
           <button onclick="removeFadeFromSub(subs.find(s=>s.id===fadeEditId))" style="width:100%;padding:6px;background:rgba(255,59,48,.07);border:1px solid rgba(255,59,48,.25);font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);cursor:pointer;transition:all .15s;border-radius:2px">✕ Remove Fade</button>
+        </div>
+      </div>
+
+      <!-- Reverse Editor (hidden by default) -->
+      <div id="reverse-editor" style="display:none;flex:1;min-height:120px;overflow:hidden;flex-direction:column;">
+        <div class="ke-hdr">
+          <span class="ke-hdr-title" style="color:#ff6b6b;display:flex;align-items:center;gap:6px">
+            <svg width="16" height="14" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="22" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 6 L2 10 L5 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10 L19 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Reverse Editor
+          </span>
+          <button class="ke-close" onclick="closeReverseEditor()" title="Back to Inspector">✕</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:10px">Reverse Mode</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <label class="rev-opt" id="rev-opt-motion">
+                <input type="checkbox" id="rev-motion-chk" onchange="revSetMode('motion',this.checked)"/>
+                <div class="rev-opt-icon" style="color:var(--orange)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><polyline points="9 5 12 2 15 5"/><polyline points="19 15 22 12 19 9"/></svg>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text)">Reverse Motion</div>
+                  <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">Flips Move effect keyframes end→start</div>
+                </div>
+              </label>
+              <label class="rev-opt" id="rev-opt-text">
+                <input type="checkbox" id="rev-text-chk" onchange="revSetMode('text',this.checked)"/>
+                <div class="rev-opt-icon" style="color:#ff6b6b">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><text x="5" y="19" font-size="7" fill="currentColor" stroke="none" font-family="monospace">TXT</text></svg>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text)">Reverse Text</div>
+                  <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">Displays subtitle text reversed (mirror-read)</div>
+                </div>
+              </label>
+              <label class="rev-opt" id="rev-opt-timing">
+                <input type="checkbox" id="rev-timing-chk" onchange="revSetMode('timing',this.checked)"/>
+                <div class="rev-opt-icon" style="color:var(--blue)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/><path d="M5 1 L2 4 L5 7" stroke="currentColor" stroke-width="1.8"/></svg>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text)">Reverse Karaoke Timing</div>
+                  <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">Syllables play in reverse order</div>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div id="rev-preview-box" style="padding:10px;background:rgba(255,107,107,.07);border:1px solid rgba(255,107,107,.2);border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.6">
+            <b style="color:#ff6b6b">Preview:</b> <span id="rev-preview-text">—</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.6;padding:8px;background:rgba(255,107,107,.05);border:1px solid rgba(255,107,107,.15);border-radius:2px">
+            <b style="color:#ff6b6b">Reverse</b> is non-destructive — the original data is preserved. Multiple modes can be active at once.
+          </div>
+        </div>
+        <div style="padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0">
+          <button onclick="removeReverseFromSub(subs.find(s=>s.id===reverseEditId))" style="width:100%;padding:6px;background:rgba(255,59,48,.07);border:1px solid rgba(255,59,48,.25);font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);cursor:pointer;transition:all .15s;border-radius:2px">✕ Remove Reverse</button>
         </div>
       </div>
 
@@ -676,6 +774,8 @@
 <div id="ke-drag-tooltip"></div>
 <!-- Global UI tooltip (fixed position, never clipped) -->
 <div id="ui-tooltip"></div>
+<!-- Block Context Menu -->
+<div id="block-ctx-menu" style="display:none;position:fixed;z-index:800;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:4px 0;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
 
 <script src="app.js"></script>
 </body>

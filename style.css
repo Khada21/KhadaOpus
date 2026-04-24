@@ -460,3 +460,117 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 /* Waveform canvas in timeline audio row */
 #tl-wave-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tl-track-row.audio-track{position:relative;overflow:hidden}
+
+/* ═══════════════ NEW FEATURES CSS ═══════════════ */
+
+/* Compound block styling */
+.sub-block.compound {
+  border-left-color: #ffd60a !important;
+  background: linear-gradient(135deg, rgba(255,214,10,.10) 0%, rgba(255,159,10,.06) 100%);
+}
+.blk-compound {
+  position:absolute;bottom:3px;left:3px;
+  font-size:8px;font-weight:800;font-family:var(--mono);
+  color:#ffd60a;border:1px solid rgba(255,214,10,.5);
+  padding:0 3px;border-radius:2px;cursor:pointer;
+  background:rgba(255,214,10,.10);letter-spacing:.5px;
+  transition:background .15s;
+}
+.blk-compound:hover,.blk-compound.active{background:rgba(255,214,10,.25);}
+
+.sl-compound-btn {
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:2px;font-size:9px;
+  font-weight:800;font-family:var(--mono);cursor:pointer;
+  background:rgba(255,214,10,.12);color:#ffd60a;
+  border:1px solid rgba(255,214,10,.4);margin-left:2px;
+  transition:all .15s;flex-shrink:0;
+}
+.sl-compound-btn:hover,.sl-compound-btn.active{background:rgba(255,214,10,.3);}
+
+/* Reverse effect styling */
+.blk-rev {
+  position:absolute;bottom:3px;right:3px;
+  width:18px;height:15px;display:flex;align-items:center;justify-content:center;
+  font-size:7px;font-weight:800;font-family:var(--mono);cursor:pointer;
+  color:#ff6b6b;border:1px solid rgba(255,107,107,.5);border-radius:2px;
+  background:rgba(255,107,107,.10);transition:background .15s;
+  letter-spacing:.5px;
+}
+.blk-rev:hover,.blk-rev.active{background:rgba(255,107,107,.28);}
+
+.sl-rev-btn {
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:2px;
+  cursor:pointer;background:rgba(255,107,107,.12);
+  color:#ff6b6b;border:1px solid rgba(255,107,107,.4);
+  margin-left:2px;transition:all .15s;flex-shrink:0;
+}
+.sl-rev-btn:hover,.sl-rev-btn.active{background:rgba(255,107,107,.3);}
+
+/* Reverse editor option rows */
+.rev-opt {
+  display:flex;align-items:flex-start;gap:10px;
+  padding:8px 10px;border:1px solid var(--border2);
+  border-radius:3px;cursor:pointer;transition:border-color .15s;
+  background:var(--panel2);
+}
+.rev-opt:hover{border-color:rgba(255,107,107,.5);}
+.rev-opt input[type=checkbox]{display:none;}
+.rev-opt:has(input:checked){border-color:#ff6b6b;background:rgba(255,107,107,.06);}
+.rev-opt-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px;background:rgba(255,255,255,.05);}
+
+/* Compound button in effects panel */
+.fx-compound-btn {
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border:1px solid rgba(255,214,10,.3);
+  border-radius:3px;cursor:pointer;background:rgba(255,214,10,.06);
+  color:#ffd60a;font-family:var(--sans);font-size:11px;font-weight:700;
+  letter-spacing:.5px;transition:all .15s;width:100%;text-align:left;
+}
+.fx-compound-btn:not([disabled]):hover{background:rgba(255,214,10,.15);border-color:#ffd60a;}
+.fx-compound-btn[disabled]{opacity:.35;cursor:not-allowed;}
+
+/* Context menu */
+#block-ctx-menu .ctx-item {
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px;font-size:12px;cursor:pointer;
+  font-family:var(--sans);color:var(--text2);
+  transition:background .1s;white-space:nowrap;
+}
+#block-ctx-menu .ctx-item:hover{background:var(--panel2);color:var(--text);}
+#block-ctx-menu .ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+#block-ctx-menu .ctx-item.danger{color:var(--red);}
+#block-ctx-menu .ctx-item.danger:hover{background:rgba(255,59,48,.1);}
+#block-ctx-menu .ctx-item svg{flex-shrink:0;opacity:.7;}
+
+/* Navigation buttons */
+#btn-prev-block,#btn-next-block{font-size:12px;padding:0 6px;}
+#btn-loop-block{font-size:9px;}
+#btn-loop-block.active svg{stroke:#ffd60a;}
+
+/* Loop indicator on play button */
+#play-icon.looping{color:#ffd60a;}
+
+/* Karaoke navigation buttons in ke-bottom-toolbar */
+.ke-nav-row {
+  display:flex;align-items:center;gap:4px;
+  padding:4px 8px;border-bottom:1px solid var(--border);
+  margin-bottom:0;flex-shrink:0;
+}
+.ke-nav-btn {
+  flex:1;padding:5px;background:var(--panel2);
+  border:1px solid var(--border2);color:var(--text2);
+  font-family:var(--mono);font-size:10px;cursor:pointer;
+  border-radius:2px;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+}
+.ke-nav-btn:hover{border-color:var(--blue);color:var(--blue);}
+.ke-play-syl-btn {
+  padding:5px 10px;background:rgba(80,70,236,.12);
+  border:1px solid rgba(80,70,236,.4);color:#7b72ff;
+  font-family:var(--sans);font-size:10px;font-weight:700;
+  cursor:pointer;border-radius:2px;transition:all .15s;
+  display:flex;align-items:center;gap:4px;
+}
+.ke-play-syl-btn:hover{background:rgba(80,70,236,.25);border-color:#7b72ff;}

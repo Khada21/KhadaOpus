@@ -31,6 +31,8 @@ function _wrapYTTWithSig(yttXml){
       move:s.move?{...s.move,...}:undefined,
       mirror:s.mirror?{...s.mirror}:undefined,
       fade:s.fade?{...s.fade}:undefined,
+      reverse:s.reverse?{...s.reverse}:undefined,          // ← Reverse effect
+      _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined, // ← Compound
       myNewEffect:s.myNewEffect?{...s.myNewEffect}:undefined, // ← ADD THIS
     })),
     tracks:[...tracks],
@@ -51,6 +53,8 @@ function saveProject(){
       move:...,
       mirror:...,
       fade:...,
+      reverse:s.reverse?{...s.reverse}:undefined,          // ← Reverse effect
+      _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined, // ← Compound
       myNewEffect:s.myNewEffect?{...s.myNewEffect}:undefined, // ← ADD THIS
     })),
     tracks:[...tracks],
@@ -67,6 +71,8 @@ function deepCloneState(){
       ...s,
       style:{...s.style},
       karaoke:s.karaoke?{...s.karaoke,syllables:s.karaoke.syllables.map(sy=>({...sy}))}:undefined,
+      reverse:s.reverse?{...s.reverse}:undefined,          // ← Reverse effect
+      _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined, // ← Compound
       myNewEffect:s.myNewEffect?{...s.myNewEffect}:undefined, // ← ADD THIS
     })),
     tracks:[...tracks],
@@ -89,8 +95,8 @@ If your new feature affects how the subtitle *looks* on YouTube (not just stored
 |---|---|
 | Initial release | Landing screen, video upload, SRT/VTT/YTT import, timeline with drag/resize, inspector (text, font, colors, position grid, shadow), multi-track auto-assignment, undo/redo (80 steps), export (.ytt, .srt, .vtt), multi-project localStorage persistence, karaoke effect, move (keyframe bezier) effect, mirror effect, fade effect, waveform display, box-select, snap/magnet, keybind customization, help modal |
 | Patch 1 | **▶ Video button** in topbar — swap video mid-session without losing subtitles (`loadVideoMidSession()`). **Karaoke space fix** — spaces merged into preceding word via `_splitIntoWordSyllables()`; no standalone space syllables in `applyKaraokeToSub`, `karaAutoSplit`, `karaAutoSplitChars`. **Unified karaoke color** — single `preColor` tint across all syllable bands (Aegisub-style), no rotating `KARA_COLORS`. **Karaoke waveform** — `reDrawKaraWave()` draws real audio waveform scoped to subtitle time window with syllable overlays. CSS: removed `border-right` from `.ke-syl-seg`. |
-| Patch 2 | **Karaoke waveform now actually visible** — root cause: `reDrawKaraWave()` was called before browser layout, so `wrap.clientWidth` was 0 and canvas rendered at 0×0. Fixed by wrapping the call in `requestAnimationFrame(()=>requestAnimationFrame(...))` inside `openKaraEditor()`. Wave area height increased from 90px to 120px with explicit `height` (not just `min-height`) so the wrap always has real pixel dimensions. Canvas switched to `position:absolute;inset:0` to fill wrap reliably. Inline `style="height:90px"` removed from HTML. Pre-karaoke color opacity slider now also triggers `reDrawKaraWave()+buildSylStrip()` live (was previously not updating canvas). |
-| Patch 1 | **▶ Video button** in topbar — swap video mid-session without losing subtitles (`loadVideoMidSession()`). **Karaoke space fix** — spaces are now merged into preceding word (`_splitIntoWordSyllables()`), no standalone space syllables. **Unified karaoke color** — single preColor tint across all syllable bands (Aegisub-style). **Karaoke waveform** — `reDrawKaraWave()` now renders real audio waveform scoped to the subtitle's time window; syllable bands are drawn as transparent overlays on top. CSS: removed `border-right` from `.ke-syl-seg` to eliminate pixel gaps between segments. |
+| Patch 2 | **Karaoke waveform visibility fix** — `reDrawKaraWave()` was called before browser layout so `wrap.clientWidth` was 0. Fixed with double `requestAnimationFrame` wrap in `openKaraEditor()`. Wave area height increased to 120px with explicit `height`. Canvas switched to `position:absolute;inset:0`. Pre-karaoke color opacity slider now triggers live canvas redraw. |
+| Patch 3 | **Block Loop Playback** — Space while a subtitle block is selected seeks to that block's start, plays through to its end, then auto-stops (no global play/pause). Pressing Space again while looping stops it. Functions: `loopSelectedBlock()`, `_startBlockLoop(sub)`, `_stopBlockLoop()`. State: `_blockLoopTimer`, `_blockLooping`. **Arrow Key Navigation** — ← / → / ↑ / ↓ navigate between subtitle blocks sorted by `startMs`. In karaoke editor mode, ← / → navigate syllables instead via `karNavSyl(dir)`. **Karaoke Syllable Nav Buttons** — visible ← Prev / ▶ Play Syllable / Next → button row (`.ke-nav-row`, `.ke-play-syl-btn`) added at top of karaoke editor bottom toolbar. **Navigation Buttons in Video Controls** — ◀ Prev Block, ▶ Next Block buttons + loop block button added to the `video-controls` bar (`#btn-prev-block`, `#btn-next-block`, `#btn-loop-block`). **Compound Block** — select 2+ blocks (Shift+click or box-select) then right-click → "Make Compound" or click the "Make Compound" button in the Effects panel. Calls `makeCompoundBlock()` which merges selected subs into one with `_compound: [originalSubs]` stored non-destructively. Right-click a compound block → "De-merge Compound" restores all originals via `demergeCompoundBlock(id)`. Badge: gold ⊞ (`.blk-compound`, `.sl-compound-btn`). **Reverse Effect** — new draggable effect card (red ↩). `sub.reverse = { motion: bool, text: bool, timing: bool }`. Three independent toggle modes: `motion` reverses Move keyframe order on export, `text` displays subtitle characters reversed via `_getDisplayText(sub)`, `timing` reverses karaoke syllable playback. Dedicated editor panel `#reverse-editor` with live preview. Functions: `hasReverse()`, `applyReverseToSub()`, `removeReverseFromSub()`, `openReverseEditor()`, `closeReverseEditor()`, `revSetMode()`. Badge: red ↩ (`.blk-rev`, `.sl-rev-btn`). **Right-Click Context Menu** — right-clicking any timeline block opens a dynamic `#block-ctx-menu` (`showBlockCtxMenu(e, subId)`) with options: Play Block, Make/De-merge Compound, Add/Edit Karaoke, Add/Edit Reverse, Add/Edit Fade, Duplicate Block, Delete Block. **deepCloneState patched** to include `reverse` and `_compound` in undo/redo snapshots. |
 
 ---
 
@@ -181,6 +187,9 @@ Every subtitle is a plain object:
   move: { keyframes: [{x, y, ease, accel, decel}], fps },
   mirror: { axis, opacity, offsetX, offsetY },
   fade: { inMs, outMs },
+  reverse: { motion: bool, text: bool, timing: bool },
+  // Compound block — present only on merged compound blocks:
+  _compound: [ /* array of original subtitle objects (full deep copies) */ ],
 }
 ```
 
@@ -346,9 +355,55 @@ Renders a ghost copy of the subtitle flipped across the chosen axis. On export, 
 
 Stepped opacity animation using multiple overlapping `<p>` elements with different `fo` (foreground opacity) values on the `<pen>`. Uses 8 opacity steps. The fade-in emits frames from the subtitle's start, the fade-out from the end.
 
+#### Reverse Effect
+`sub.reverse = { motion: bool, text: bool, timing: bool }`
+
+A non-destructive display modifier with three independent modes that can be toggled in any combination:
+
+- **`motion`** — Reverses the Move effect keyframe order on export. The subtitle plays its motion path end-to-start instead of start-to-end. The underlying `sub.move.keyframes` array is not mutated; the reversal is applied during `buildYTT()`.
+- **`text`** — Displays the subtitle's characters in reverse order in the video overlay and on the timeline block. Implemented via `_getDisplayText(sub)` which returns `[...sub.text].reverse().join('')` when `reverse.text` is true. The original `sub.text` string is never modified.
+- **`timing`** — Reverses karaoke syllable playback order. The syllables array is not mutated; this is applied during playback and export.
+
+The Reverse Editor (`#reverse-editor`) replaces the Inspector when active, showing three checkbox options and a live preview of the reversed text. Badge: red ↩ (`.blk-rev` on timeline, `.sl-rev-btn` in subtitle list).
+
+Key functions: `hasReverse(sub)`, `applyReverseToSub(sub)`, `removeReverseFromSub(sub)`, `openReverseEditor(id)`, `closeReverseEditor()`, `revSetMode(key, val)`, `_updateReversePreview(id)`, `_getDisplayText(sub)`.
+
 ---
 
-### 9. Subtitle Overlay (Video Preview)
+### 9. Compound Block
+
+A Compound Block merges multiple subtitle blocks into a single timeline block, similar to a compound clip in video editing software. The original blocks are preserved inside `sub._compound` as deep copies.
+
+**Creating:** Select 2+ blocks (Shift+click or box-select), then either:
+- Right-click any selected block → **Make Compound**
+- Click the **Make Compound** button in the Effects panel (enabled only when 2+ blocks are selected)
+
+**De-merging:** Right-click the compound block → **De-merge Compound** — all original sub-blocks are restored to the timeline exactly as they were.
+
+**Data model:** The compound block spans `startMs` of the first child to `endMs` of the last child. Its `text` is all child texts joined with spaces. It inherits the style of the first child. The `_compound` array contains full deep copies of all original subtitle objects (including their own effects). Compound blocks are included in undo/redo snapshots and localStorage saves.
+
+**Visual:** Gold ⊞ badge on the timeline block and in the subtitle list. The block has a gold left border and subtle gradient background.
+
+**Limitation:** Compound blocks export as a single plain subtitle (their merged text) in `.ytt`/`.srt`/`.vtt`. The internal `_compound` data is preserved in the `.ytt` signature comment for roundtrip fidelity.
+
+---
+
+### 10. Right-Click Context Menu
+
+Right-clicking any subtitle block on the timeline calls `showBlockCtxMenu(e, subId)`, which builds a dynamic dropdown menu (`#block-ctx-menu`) positioned near the cursor. The menu adapts to the current block's state:
+
+- If the block is a compound block → shows **De-merge Compound**
+- If 2+ blocks are multi-selected → shows **Make Compound (N blocks)**
+- **Play This Block** — seeks to the block's start and loops it
+- **Add/Edit Karaoke**, **Add/Edit Reverse**, **Add/Edit Fade** — toggles or opens the respective effect editor
+- **Duplicate Block** — clones the block immediately after itself
+- **Delete Block** — deletes with undo support
+
+The menu closes on any outside click. `closeCtxMenu()` hides it explicitly.
+
+---
+
+### 11. Block Loop Playback & Navigation
 
 Subtitles are rendered on top of the video as `<div>` elements (`_ovPool` — a pool keyed by subtitle ID). Updated in the RAF loop by `_updOvFast()`. Position is determined by the `position` field (1–9 grid):
 
@@ -365,7 +420,7 @@ The overlay uses `_getBaseStyle()` to compute the CSS from the subtitle's style 
 
 ---
 
-### 10. Import / Export
+### 12. Import / Export
 
 **Import** (`importFile()` → `_processImport()`):
 - `.ytt` / `.xml`: Check for Khada signature comment → restore from JSON. Otherwise fall back to `_parseYTT()` (extracts timing/text from XML).
@@ -381,7 +436,7 @@ A YTT banner warning (`#ytt-banner`) appears in the editor when any YTT-only fea
 
 ---
 
-### 11. Keybind System
+### 13. Keybind System
 
 All keyboard shortcuts are stored in a `KEYBINDS` object and persisted to `localStorage` under `khadaOpus_keybinds`. The Keybind Modal (`#kb-modal`) lists all actions and allows rebinding by clicking a key, then pressing the new combination. Default bindings include: Space (play), Q (set in), E (set out), N (add block), Delete (delete block), Ctrl+Z (undo), Ctrl+Y (redo), etc.
 
@@ -436,10 +491,15 @@ User action (click/drag/type)
 ## Known Patterns & Gotchas
 
 - **`buildYTT()` is monkey-patched.** The Move effect module (`// ═══ MOVE EFFECT`) replaces the original `buildYTT` with a wrapper on startup. The wrapper handles everything (move frames, fade steps, mirror ghost frames, karaoke), so the base `buildYTT` defined earlier in the file is the fallback only.
-- **`renderBlocks()` and `renderSL()` are also monkey-patched** by the Karaoke module to add K/M/F badges.
+- **`renderBlocks()` and `renderSL()` are multiply monkey-patched** — by the Karaoke module (K badge), Move module (M badge), Fade module (F badge), Mirror module (mirror badge), and now also by the Compound module (⊞ badge), Reverse module (↩ badge), and the Context Menu module (which attaches `contextmenu` listeners after every render). Each patch chains to the previous via a captured reference. The order of patching matters — patches applied later run first.
 - **`snapshot()` is monkey-patched** to also call `scheduleSave()`.
+- **`deepCloneState()` is monkey-patched** by Patch 3 to include `reverse` and `_compound` fields.
+- **`onKey()` is monkey-patched** by Patch 3 to intercept arrow keys (block navigation / syllable navigation) and Space (block loop) before falling through to the original handler.
+- **`selSub()` is monkey-patched twice** by Patch 3: once to update the "Make Compound" button disabled state, once to stop any active block loop.
 - **`pxS`** (pixels per second) controls all timeline geometry. Changing it requires a full `renderTL()` call.
 - **`ms2x(ms)`** and **`x2ms(x)`** are the coordinate conversion helpers — always use these, never do the math inline.
 - **Position `customX`/`customY`** are currently `null` and reserved for a future drag-to-position feature. Do not use these fields for anything else.
 - **Track 0 always exists.** `collapseEmpty()` re-packs tracks but always preserves index 0.
 - **`uid()`** generates 8-character random base-36 strings. Used for subtitle IDs and project IDs.
+- **Compound blocks export as plain subtitles.** The `_compound` array is stored in the `.ytt` signature comment for roundtrip fidelity, but the actual YTT XML body only contains the merged text. De-merge is only possible inside Khada Opus.
+- **Reverse.text is display-only.** `_getDisplayText(sub)` returns reversed text for overlay rendering and block labels, but `sub.text` is never mutated. Export functions must call `_getDisplayText(sub)` instead of `sub.text` when `reverse.text` is true.
