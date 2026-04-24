@@ -450,3 +450,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .ke-btn-row{display:flex;gap:4px}
 .ke-btn-row .ke-tbtn{flex:1;justify-content:center}
 
+
+/* Block YouTube iframe UI — pointer-events blocker sits above iframe, below subtitle overlay */
+#vwrap::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  z-index:10;
+  background:transparent;
+  pointer-events:none; /* let clicks through to our controls below the video */
+}
+/* The iframe itself should not catch mouse events — our overlay + controls handle everything */
+#yt-player[src]{
+  pointer-events:none;
+}
