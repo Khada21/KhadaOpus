@@ -159,8 +159,10 @@ function goHome(){
   const vwrap=document.getElementById('vwrap');
   const oldPlayer=document.getElementById('yt-player');
   const oldFb=document.getElementById('yt-fallback');
+  const oldBlocker=document.getElementById('yt-click-blocker');
   if(oldPlayer)oldPlayer.remove();
   if(oldFb)oldFb.remove();
+  if(oldBlocker)oldBlocker.remove();
   const fresh=document.createElement('div');fresh.id='yt-player';
   vwrap.appendChild(fresh);
   document.getElementById('no-video-state').style.display='flex';
@@ -287,6 +289,12 @@ function _createYTPlayer(v){
         const d=player.getDuration();
         if(d&&d>0){dur=Math.round(d*1000);document.getElementById('dur-t').textContent=msToDisp(dur);renderTL();}
         if(fb)fb.style.display='none';
+        // Add transparent click-blocker so mouse events don't fall into the YT iframe
+        const vwrap=document.getElementById('vwrap');
+        let blocker=document.getElementById('yt-click-blocker');
+        if(!blocker){blocker=document.createElement('div');blocker.id='yt-click-blocker';vwrap.appendChild(blocker);}
+        // Draw waveform placeholder now that video is loaded
+        _drawFakeWaveform();
       },
       onStateChange(e){
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
@@ -371,6 +379,85 @@ const posCSS_map={
   8:{top:'8px',left:'50%',right:'',bottom:'',transform:'translateX(-50%)'},
   9:{top:'8px',right:'5%',left:'auto',bottom:'',transform:'none'}
 };
+
+// ═══════════════ WAVEFORM ════════════════
+// Generates a pseudo-random but consistent waveform from the video ID.
+// Not real audio data — but gives a useful visual reference for timing.
+function _drawFakeWaveform(){
+  // Timeline audio track
+  const audioRow=document.getElementById('audio-track');
+  if(!audioRow)return;
+  // Remove old canvas if any
+  let tlCanvas=document.getElementById('tl-wave-canvas');
+  if(tlCanvas)tlCanvas.remove();
+  const lbl=audioRow.querySelector('.audio-empty-lbl');
+  if(lbl)lbl.style.display='none';
+  tlCanvas=document.createElement('canvas');
+  tlCanvas.id='tl-wave-canvas';
+  audioRow.appendChild(tlCanvas);
+  _renderTLWave(tlCanvas);
+
+  // Karaoke editor waveform
+  const waveEmpty=document.getElementById('ke-wave-empty');
+  if(waveEmpty)waveEmpty.style.display='none';
+}
+
+function _renderTLWave(canvas){
+  if(!canvas||!dur)return;
+  const row=canvas.parentElement;
+  const W=Math.max(row.scrollWidth||1, Math.round(dur/1000*pxS));
+  const H=row.clientHeight||64;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // Seed from video ID for consistency
+  const seed=(player&&player.getVideoData)?player.getVideoData().video_id||'x':'x';
+  let r=0;
+  for(let i=0;i<seed.length;i++)r=(r*31+seed.charCodeAt(i))&0xfffffff;
+  function rand(){r=(r*1664525+1013904223)&0xfffffff;return r/0xfffffff;}
+
+  // Generate peaks: one per ~50ms of audio
+  const nPeaks=Math.ceil(dur/50);
+  const peaks=[];
+  let prev=0.4;
+  for(let i=0;i<nPeaks;i++){
+    prev=Math.max(0.05,Math.min(1,prev+(rand()-0.5)*0.35));
+    peaks.push(prev);
+  }
+
+  // Draw waveform
+  const mid=H/2;
+  ctx.strokeStyle='#30d158';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let x=0;x<W;x++){
+    const t=x/W;
+    const pi=Math.min(nPeaks-1,Math.floor(t*nPeaks));
+    const amp=peaks[pi]*mid*0.85;
+    if(x===0)ctx.moveTo(x,mid-amp);
+    else ctx.lineTo(x,mid-amp);
+  }
+  // Mirror bottom
+  for(let x=W-1;x>=0;x--){
+    const t=x/W;
+    const pi=Math.min(nPeaks-1,Math.floor(t*nPeaks));
+    const amp=peaks[pi]*mid*0.85;
+    ctx.lineTo(x,mid+amp);
+  }
+  ctx.closePath();
+  ctx.fillStyle='rgba(48,209,88,0.18)';
+  ctx.fill();
+  ctx.strokeStyle='rgba(48,209,88,0.6)';
+  ctx.lineWidth=1;
+  ctx.stroke();
+}
+
+// Re-render TL waveform when zoom changes (canvas width depends on pxS)
+function _refreshWave(){
+  const c=document.getElementById('tl-wave-canvas');
+  if(c)_renderTLWave(c);
+}
 
 function startRaf(){
   let last=performance.now();
@@ -883,6 +970,7 @@ function handleZoom(v){
   pxS=minPx*Math.pow(400/minPx,v/100);
   document.getElementById('zoom-sl').style.setProperty('--pct',v+'%');
   renderTL();
+  _refreshWave();
 }
 function syncZ(){
   const minPx=fitPxS();
@@ -1395,7 +1483,7 @@ function openKaraEditor(id){
     if(kpre)kpre.value=sub.karaoke.preColor||'#5046EC';
     if(kprea)kprea.value=sub.karaoke.preAlpha??100;
   }
-  const hasAudio=!!(player&&!player._iframe);
+  const hasAudio=!!(player&&player.getDuration&&player.getDuration()>0);
   const waveEmpty=document.getElementById('ke-wave-empty');
   if(waveEmpty)waveEmpty.style.display=hasAudio?'none':'flex';
   reDrawKaraWave();
@@ -1417,7 +1505,7 @@ function closeKaraEditor(){
   renderBlocks();
 }
 
-// ── Draw syllable color bands only (no fake waveform) ──
+// ── Draw syllable color bands + waveform overlay ──
 function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
@@ -1453,6 +1541,37 @@ function reDrawKaraWave(){
     ctx.fillText(label.length>8?label.slice(0,7)+'…':label,Math.floor(px)+Math.ceil(w)/2,H/2);
     px+=w;
   });
+
+  // Waveform overlay (fake, seeded from video ID)
+  if(player&&player.getDuration&&player.getDuration()>0){
+    const seed=(player.getVideoData?player.getVideoData().video_id:null)||'x';
+    let rv=0;for(let i=0;i<seed.length;i++)rv=(rv*31+seed.charCodeAt(i))&0xfffffff;
+    function randv(){rv=(rv*1664525+1013904223)&0xfffffff;return rv/0xfffffff;}
+    const sub2=subs.find(s=>s.id===karaEditId);
+    const subDurMs=sub2?(sub2.endMs-sub2.startMs):2000;
+    const nPeaks=Math.ceil(subDurMs/40);
+    const kPeaks=[];let kp=0.4;
+    // Offset seed by subtitle start so each sub looks different
+    const startOff=sub2?Math.floor(sub2.startMs/40):0;
+    for(let i=0;i<startOff+nPeaks;i++){kp=Math.max(0.05,Math.min(1,kp+(randv()-0.5)*0.35));if(i>=startOff)kPeaks.push(kp);}
+    const mid2=H/2;
+    ctx.save();
+    ctx.globalAlpha=0.35;
+    ctx.beginPath();
+    for(let x=0;x<W;x++){
+      const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
+      const amp=kPeaks[pi]*mid2*0.8;
+      if(x===0)ctx.moveTo(x,mid2-amp); else ctx.lineTo(x,mid2-amp);
+    }
+    for(let x=W-1;x>=0;x--){
+      const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
+      const amp=kPeaks[pi]*mid2*0.8;
+      ctx.lineTo(x,mid2+amp);
+    }
+    ctx.closePath();
+    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
+    ctx.restore();
+  }
 
   // Draw boundary lines — thick and grabbable-looking
   px=0;
