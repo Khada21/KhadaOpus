@@ -33,6 +33,18 @@
     <div class="chip">( ✧◡✧ ) 100% free</div>
   </div>
   <div class="land-skip">or <a onclick="startBlank()">start editing without a video ✧</a></div>
+  <div id="resume-banner" style="display:none;margin-top:18px;width:min(480px,86vw);background:rgba(48,209,88,.07);border:1px solid rgba(48,209,88,.3);padding:14px 18px;display:none;flex-direction:column;gap:8px;animation:fadeUp .8s .5s both">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700;letter-spacing:1px">✦ UNSAVED PROJECT FOUND</div>
+        <div id="resume-meta" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button onclick="resumeProject()" style="padding:6px 14px;background:var(--green);border:none;color:#000;font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:2px">Resume ✦</button>
+        <button onclick="discardProject()" style="padding:6px 10px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--mono);font-size:10px;cursor:pointer;border-radius:2px" title="Discard saved project">✕</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- EDITOR -->
@@ -41,6 +53,7 @@
     <div class="topbar-logo"><span class="k">Khada</span> <span class="o">Opus</span></div>
     <div class="tb-sep"></div>
     <div class="topbar-title" id="topbar-title">—</div>
+    <div id="save-status" style="font-family:var(--mono);font-size:10px;color:var(--green);opacity:0;transition:opacity .4s;white-space:nowrap">✦ Saved</div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="tb-btn kb-btn" onclick="openHelpModal()" title="Manual — how to use Khada Opus">?</button>
       <button class="tb-btn kb-btn" onclick="openKbModal()" title="Keyboard shortcuts & keybind customization">⌨</button>

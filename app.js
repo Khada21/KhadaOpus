@@ -24,6 +24,8 @@ function snapshot(){
   // Any new action clears the redo stack
   redoStack.length=0;
   updUndoRedoBtns();
+  // Autosave after every undoable action
+  scheduleSave();
 }
 
 function applyState(stateStr){
@@ -55,6 +57,83 @@ function updUndoRedoBtns(){
   if(u){u.disabled=!undoStack.length;}
   if(r){r.disabled=!redoStack.length;}
 }
+
+// ═══════════════ AUTOSAVE / PROJECT PERSISTENCE ════════════════
+const PROJECT_KEY = 'khadaOpus_project_v1';
+let _autosaveTimer = null;
+
+function saveProject(){
+  try{
+    const data = {
+      subs: subs.map(s=>({...s, style:{...s.style},
+        karaoke: s.karaoke ? {...s.karaoke, syllables: s.karaoke.syllables.map(sy=>({...sy}))} : undefined,
+        move: s.move ? {...s.move, keyframes: s.move.keyframes.map(k=>({...k}))} : undefined,
+        mirror: s.mirror ? {...s.mirror} : undefined,
+        fade: s.fade ? {...s.fade} : undefined,
+      })),
+      tracks: [...tracks],
+      savedAt: Date.now(),
+      videoName: document.getElementById('topbar-title')?.textContent || '',
+    };
+    localStorage.setItem(PROJECT_KEY, JSON.stringify(data));
+    _showSaveStatus('✦ Saved');
+  } catch(e){
+    console.warn('Autosave failed:', e);
+  }
+}
+
+function _showSaveStatus(msg){
+  let el = document.getElementById('save-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(()=>{ el.style.opacity = '0'; }, 2000);
+}
+
+function scheduleSave(){
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(saveProject, 1500);
+}
+
+function hasSavedProject(){
+  try{
+    const raw = localStorage.getItem(PROJECT_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    return !!(d && d.subs && d.subs.length > 0);
+  } catch(e){ return false; }
+}
+
+function getSavedProjectMeta(){
+  try{
+    const raw = localStorage.getItem(PROJECT_KEY);
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    return { count: d.subs?.length||0, videoName: d.videoName||'', savedAt: d.savedAt||0 };
+  } catch(e){ return null; }
+}
+
+function loadSavedProject(){
+  try{
+    const raw = localStorage.getItem(PROJECT_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(!d||!d.subs) return false;
+    subs = d.subs;
+    tracks = d.tracks || [0];
+    return true;
+  } catch(e){ return false; }
+}
+
+function clearSavedProject(){
+  try{ localStorage.removeItem(PROJECT_KEY); } catch(e){}
+}
+
+// Hook scheduleSave into all state-mutating functions
+// We patch snapshot() so every undoable action triggers autosave
+const _origSnapshot = snapshot;
+// We'll call scheduleSave from snapshot after it runs
 
 // ═══════════════ TOOLTIP ENGINE ════════════════
 // Uses a single fixed <div id="ui-tooltip"> — never clipped by overflow:hidden parents
@@ -164,6 +243,7 @@ function skipTime(s){
 }
 
 function goHome(){
+  clearTimeout(_autosaveTimer);
   subs=[]; tracks=[0]; selId=null; multi=new Set();
   mirrorEditId=null; fadeEditId=null;
   Object.keys(_ovPool).forEach(id=>{ if(_ovPool[id].parentNode) _ovPool[id].parentNode.removeChild(_ovPool[id]); delete _ovPool[id]; });
@@ -207,11 +287,46 @@ function goHome(){
 })();
 
 
+
+// ── Resume / Discard saved project ──
+function resumeProject(){
+  const banner=document.getElementById('resume-banner');
+  if(banner)banner.style.display='none';
+  document.getElementById('topbar-title').textContent=
+    getSavedProjectMeta()?.videoName||'Restored Project';
+  enterEditor(()=>{ init(null); });
+}
+
+function discardProject(){
+  clearSavedProject();
+  const banner=document.getElementById('resume-banner');
+  if(banner)banner.style.display='none';
+}
+
+// Show resume banner on page load if a saved project exists
+(function checkSavedProject(){
+  function check(){
+    const banner=document.getElementById('resume-banner');
+    if(!banner)return;
+    if(hasSavedProject()){
+      const meta=getSavedProjectMeta();
+      const age=Date.now()-(meta.savedAt||0);
+      const ageStr=age<60000?'just now':age<3600000?Math.round(age/60000)+'m ago':age<86400000?Math.round(age/3600000)+'h ago':Math.round(age/86400000)+'d ago';
+      const metaEl=document.getElementById('resume-meta');
+      if(metaEl) metaEl.textContent=`${meta.count} subtitle${meta.count!==1?'s':''} · ${meta.videoName||'no video'} · saved ${ageStr}`;
+      banner.style.display='flex';
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',check);
+  else check();
+})();
+
 // ═══════════════ INIT ════════════════
 function init(v){
   loadKeybinds();
   undoStack.length=0;redoStack.length=0;updUndoRedoBtns();
-  loadDemos();
+  // Try to restore saved project; fall back to demos
+  if(!loadSavedProject()) loadDemos();
   syncTracks();rebuildSidebar();
   // Set initial zoom to fit-to-view after layout is painted
   requestAnimationFrame(()=>{
