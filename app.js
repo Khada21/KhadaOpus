@@ -3214,6 +3214,8 @@ function mvDrawOverlay(){
   svg.innerHTML='';
   if(!sub||!sub.move)return;
 
+  // Always draw and edit the REAL keyframe array regardless of reverse.motion.
+  // reverse.motion only affects export/playback order, not the editor.
   const kfs=sub.move.keyframes;
   if(kfs.length<2)return;
   const colors=['#ff9f0a','#0a84ff','#30d158','#bf5af2','#ff453a','#64d2ff'];
