@@ -2651,6 +2651,32 @@ renderBlocks=function(){
       });
       el.appendChild(xb);
     }
+    // Reverse badge
+    if(hasReverse(sub)){
+      const rv=document.createElement('span');
+      rv.className='blk-rev'+(reverseEditId===sub.id?' active':'');
+      rv.title='Reverse — click to edit';
+      rv.innerHTML='↩';
+      rv.addEventListener('mousedown',e=>{e.stopPropagation();});
+      rv.addEventListener('click',e=>{
+        e.stopPropagation();
+        selId=sub.id;multi.clear();
+        if(reverseEditId===sub.id){closeReverseEditor();}
+        else{openReverseEditor(sub.id);}
+      });
+      el.appendChild(rv);
+    }
+    // Compound badge
+    if(sub._compound&&sub._compound.length){
+      const cb=document.createElement('span');
+      cb.className='blk-compound'+(sub.id===selId?' active':'');
+      cb.title=`Compound (${sub._compound.length} blocks) — right-click to de-merge`;
+      cb.innerHTML='⊞';
+      cb.addEventListener('mousedown',e=>{e.stopPropagation();});
+      cb.addEventListener('click',e=>{e.stopPropagation();showBlockCtxMenu(e,sub.id);});
+      el.appendChild(cb);
+      el.classList.add('compound');
+    }
     const lh=mk('div','rh l');lh.addEventListener('mousedown',e=>startRes(e,sub.id,'l'));
     const rh=mk('div','rh r');rh.addEventListener('mousedown',e=>startRes(e,sub.id,'r'));
     el.prepend(lh);el.appendChild(rh);
@@ -4777,30 +4803,7 @@ function demergeCompoundBlock(id){
   syncTracks(); rebuildSidebar(); renderTL(); renderSL(); updInsp(); chkYtt();
 }
 
-// Patch renderBlocks and renderSL to show compound badge
-const _rbForCompound = renderBlocks;
-renderBlocks = function(){
-  _rbForCompound.apply(this, arguments);
-  subs.forEach(sub=>{
-    if(!sub._compound||!sub._compound.length) return;
-    const el = document.querySelector(`.sub-block[data-id="${sub.id}"]`);
-    if(!el) return;
-    if(!el.querySelector('.blk-compound')){
-      const badge = document.createElement('span');
-      badge.className = 'blk-compound' + (sub.id===selId?' active':'');
-      badge.title = `Compound (${sub._compound.length} blocks) — right-click to de-merge`;
-      badge.innerHTML = '⊞';
-      badge.addEventListener('mousedown', e=>{e.stopPropagation();});
-      badge.addEventListener('click', e=>{
-        e.stopPropagation();
-        showBlockCtxMenu(e, sub.id);
-      });
-      el.appendChild(badge);
-    }
-    el.classList.add('compound');
-  });
-};
-
+// Compound renderSL patch — keep only the sidebar list badge
 const _origRenderSLForCompound = renderSL;
 renderSL = function(){
   _origRenderSLForCompound.apply(this, arguments);
@@ -4956,33 +4959,6 @@ renderSL = function(){
       else { openReverseEditor(s.id); }
     };
     el.appendChild(rb);
-  });
-};
-
-// ── Patch renderBlocks to show Reverse badge ──
-const _rbForReverse = renderBlocks;
-renderBlocks = function(){
-  _rbForReverse.apply(this, arguments);
-  subs.filter(s=>hasReverse(s)).forEach(sub=>{
-    const el = document.querySelector(`.sub-block[data-id="${sub.id}"]`);
-    if(!el||el.querySelector('.blk-rev')) return;
-    const badge = document.createElement('span');
-    badge.className = 'blk-rev' + (reverseEditId===sub.id?' active':'');
-    badge.title = 'Reverse — click to edit';
-    badge.innerHTML = '↩';
-    badge.addEventListener('mousedown', e=>{e.stopPropagation();});
-    badge.addEventListener('click', e=>{
-      e.stopPropagation();
-      selId = sub.id; multi.clear();
-      if(reverseEditId===sub.id){ closeReverseEditor(); }
-      else { openReverseEditor(sub.id); }
-    });
-    el.appendChild(badge);
-  });
-  // Also patch text display for reversed-text subs
-  subs.filter(s=>s.reverse&&s.reverse.text).forEach(sub=>{
-    const el = document.querySelector(`.sub-block[data-id="${sub.id}"] .sub-block-text`);
-    if(el) el.textContent = _getDisplayText(sub);
   });
 };
 
