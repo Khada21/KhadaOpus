@@ -451,16 +451,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .ke-btn-row .ke-tbtn{flex:1;justify-content:center}
 
 
-/* Block YouTube iframe UI — pointer-events blocker sits above iframe, below subtitle overlay */
-#vwrap::after{
-  content:'';
+
+/* Transparent click-blocker over the YouTube iframe so clicks don't go into YT UI */
+#yt-click-blocker{
   position:absolute;
   inset:0;
-  z-index:10;
+  z-index:5;
   background:transparent;
-  pointer-events:none; /* let clicks through to our controls below the video */
+  cursor:default;
 }
-/* The iframe itself should not catch mouse events — our overlay + controls handle everything */
-#yt-player[src]{
+/* Waveform canvas in timeline audio track */
+#tl-wave-canvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
   pointer-events:none;
+  opacity:0.7;
+}
+.tl-track-row.audio-track{
+  position:relative;
+  overflow:hidden;
 }
