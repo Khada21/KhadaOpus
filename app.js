@@ -1372,7 +1372,7 @@ let karaSylTimer=null; // for space-key syllable preview
 
 function hasKaraoke(sub){return !!(sub&&sub.karaoke&&sub.karaoke.syllables&&sub.karaoke.syllables.length>0);}
 
-const KARA_COLORS=['#1a3a6e','#1a4a2e','#3a1a5e','#4a2a1a','#1a3a4a','#3a3a1a','#2a1a3a','#1a4a3a'];
+const KARA_COLORS=['#1a3a6e']; // single color like Aegisub — selection highlights active syl
 
 // ── Drag and drop from effects panel ──
 (function initKaraDnd(){
@@ -1403,8 +1403,9 @@ const KARA_COLORS=['#1a3a6e','#1a4a2e','#3a1a5e','#4a2a1a','#1a3a4a','#3a3a1a','
 function applyKaraokeToSub(sub){
   if(hasKaraoke(sub))return;
   const totalMs=sub.endMs-sub.startMs;
-  const words=sub.text.match(/\S+|\s+/g)||[sub.text];
-  const syllables=words.map(w=>({text:w,durMs:Math.max(50,Math.round((w.length/Math.max(1,sub.text.length))*totalMs))}));
+  // Split by words only — append trailing space to each word, no standalone space syllables
+  const raw=sub.text.match(/\S+\s*/g)||[sub.text];
+  const syllables=raw.map(w=>({text:w,durMs:Math.max(50,Math.round((w.length/Math.max(1,sub.text.length))*totalMs))}));
   normalizeSylDurs(syllables,totalMs);
   sub.karaoke={syllables,preColor:'#5046EC',mainColor:'#FEFEFE',preAlpha:100,mainAlpha:100};
   renderBlocks();renderSL();
@@ -1507,8 +1508,11 @@ function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
   if(!canvas||!wrap)return;
-  const W=wrap.clientWidth||300,H=wrap.clientHeight||90;
+  // Use offsetWidth/Height; fall back to 300×90 so we never get stuck in defer loop
+  const W=wrap.offsetWidth||wrap.clientWidth||300;
+  const H=wrap.offsetHeight||wrap.clientHeight||90;
   canvas.width=W;canvas.height=H;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,W,H);
 
@@ -1517,34 +1521,17 @@ function reDrawKaraWave(){
   const syls=sub.karaoke.syllables;
   const totalMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
 
-  // Draw syllable color bands
-  let px=0;
-  syls.forEach((syl,i)=>{
-    const w=(syl.durMs/totalMs)*W;
-    ctx.fillStyle=KARA_COLORS[i%KARA_COLORS.length];
-    ctx.globalAlpha=i===karaSelSyl?0.75:0.45;
-    ctx.fillRect(Math.floor(px),0,Math.ceil(w),H);
-    ctx.globalAlpha=1;
-    // selected highlight border
-    if(i===karaSelSyl){
-      ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=2;
-      ctx.strokeRect(Math.floor(px)+1,1,Math.ceil(w)-2,H-2);
-    }
-    // syllable label
-    ctx.fillStyle='rgba(255,255,255,'+(i===karaSelSyl?'0.95':'0.6')+')';
-    ctx.font='bold '+(H>60?'12':'10')+'px monospace';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    const label=syl.text.trim()||'·';
-    ctx.fillText(label.length>8?label.slice(0,7)+'…':label,Math.floor(px)+Math.ceil(w)/2,H/2);
-    px+=w;
-  });
-
-  // Waveform overlay — per-pixel accurate from raw samples
+  // ── Waveform FIRST (behind syllable bands) ──
   if(_waveformSamples && dur > 0 && sub){
+    // Dark background
+    ctx.fillStyle='#0a0a0c';
+    ctx.fillRect(0,0,W,H);
     const subStartMs=sub.startMs, subEndMs=sub.endMs;
     const totalSamp=_waveformSamples.length;
     const mid2=H/2;
-    ctx.save(); ctx.globalAlpha=0.5;
+    // Build per-pixel peaks for this subtitle window
+    const peaks=new Float32Array(W);
+    let maxPk=0.001;
     for(let x=0;x<W;x++){
       const tMs=subStartMs+(x/W)*(subEndMs-subStartMs);
       const tMsNext=subStartMs+((x+1)/W)*(subEndMs-subStartMs);
@@ -1552,12 +1539,58 @@ function reDrawKaraWave(){
       const e2=Math.min(totalSamp,Math.ceil(tMsNext/dur*totalSamp));
       let rms=0,n=0;
       for(let i2=s;i2<e2;i2++){rms+=_waveformSamples[i2]*_waveformSamples[i2];n++;}
-      const amp=n>0?Math.sqrt(rms/n)*mid2*0.88:0;
-      ctx.fillStyle='rgba(255,255,255,0.7)';
+      peaks[x]=n>0?Math.sqrt(rms/n):0;
+      if(peaks[x]>maxPk)maxPk=peaks[x];
+    }
+    // Draw filled waveform — bright green
+    for(let x=0;x<W;x++){
+      const amp=(peaks[x]/maxPk)*mid2*0.88;
+      // Filled background
+      ctx.fillStyle='rgba(48,209,88,0.15)';
+      ctx.fillRect(x,0,1,H);
+      // Waveform bar
+      ctx.fillStyle='rgba(48,209,88,0.85)';
       ctx.fillRect(x,mid2-amp,1,amp*2||1);
     }
-    ctx.restore();
+    // Center line
+    ctx.strokeStyle='rgba(48,209,88,0.3)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,mid2);ctx.lineTo(W,mid2);ctx.stroke();
+  } else {
+    ctx.fillStyle='#0a0a0c';
+    ctx.fillRect(0,0,W,H);
   }
+
+  // ── Syllable color bands (semi-transparent over waveform) ──
+  const BASE_COLOR='#1a3a6e';
+  const SEL_COLOR='#0a5a9e';
+  let px=0;
+  syls.forEach((syl,i)=>{
+    const w=(syl.durMs/totalMs)*W;
+    const isSpace=!syl.text.trim();
+    const isSel=i===karaSelSyl;
+    ctx.fillStyle=isSel?SEL_COLOR:BASE_COLOR;
+    ctx.globalAlpha=isSel?0.55:(isSpace?0.15:0.35);
+    ctx.fillRect(Math.floor(px),0,Math.ceil(w),H);
+    ctx.globalAlpha=1;
+    if(isSel){
+      ctx.strokeStyle='rgba(100,200,255,0.9)';ctx.lineWidth=2;
+      ctx.strokeRect(Math.floor(px)+1,1,Math.ceil(w)-2,H-2);
+    }
+    // Label
+    if(!isSpace){
+      ctx.fillStyle='rgba(255,255,255,'+(isSel?'1.0':'0.85')+')';
+      ctx.font=(isSel?'bold ':'')+''+(H>60?'12':'10')+'px monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      const label=syl.text.trim();
+      const lx=Math.floor(px)+Math.ceil(w)/2;
+      // Text shadow for readability over waveform
+      ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=3;
+      ctx.fillText(label.length>8?label.slice(0,7)+'…':label,lx,H/2);
+      ctx.shadowBlur=0;
+    }
+    px+=w;
+  });
 
   // Draw boundary lines — thick and grabbable-looking
   px=0;
@@ -1595,7 +1628,7 @@ function buildSylStrip(){
     seg.className='ke-syl-seg'+(i===karaSelSyl?' sel':'');
     seg.style.left=leftPct+'%';
     seg.style.width=widthPct+'%';
-    seg.style.background=KARA_COLORS[i%KARA_COLORS.length];
+    seg.style.background=i===karaSelSyl?'#0a5a9e':'#1a3a6e';
     seg.style.color='#fff';
     seg.dataset.idx=i;
     seg.textContent=syl.text||'·';
@@ -1852,7 +1885,8 @@ function karaDelSel(){
 function karaAutoSplit(){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
-  const words=sub.text.match(/\S+|\s+/g)||[sub.text];
+  // Words with trailing space merged in — no standalone space syllables
+  const words=sub.text.match(/\S+\s*/g)||[sub.text];
   const syllables=words.map(w=>({text:w,durMs:Math.max(50,Math.round((w.length/Math.max(1,sub.text.length))*totalMs))}));
   normalizeSylDurs(syllables,totalMs);
   sub.karaoke.syllables=syllables;karaSelSyl=null;
@@ -1861,7 +1895,15 @@ function karaAutoSplit(){
 function karaAutoSplitChars(){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
-  const chars=[...sub.text];
+  // Split by char but merge trailing spaces into the preceding char
+  const raw=[...sub.text];
+  const merged=[];
+  raw.forEach(c=>{
+    if(c===' '&&merged.length>0) merged[merged.length-1]+=c;
+    else merged.push(c);
+  });
+  const nonEmpty=merged.filter(s=>s.trim().length>0);
+  const chars=nonEmpty.length?nonEmpty:merged;
   const syllables=chars.map(c=>({text:c,durMs:Math.max(30,Math.round(totalMs/chars.length))}));
   normalizeSylDurs(syllables,totalMs);
   sub.karaoke.syllables=syllables;karaSelSyl=null;
