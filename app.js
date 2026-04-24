@@ -1974,11 +1974,14 @@ function openKaraEditor(id){
     if(kpre)kpre.value=sub.karaoke.preColor||'#5046EC';
     if(kprea)kprea.value=sub.karaoke.preAlpha??100;
   }
-  const hasAudio=!!_waveformPeaks;
+  // Always hide the "no audio" text overlay — canvas draws its own empty state
   const waveEmpty=document.getElementById('ke-wave-empty');
-  if(waveEmpty)waveEmpty.style.display=hasAudio?'none':'flex';
-  reDrawKaraWave();
-  buildSylStrip();
+  if(waveEmpty)waveEmpty.style.display='none';
+  // Defer draw until AFTER browser layout — clientWidth is 0 while display:none
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    reDrawKaraWave();
+    buildSylStrip();
+  }));
   renderBlocks();
 }
 
@@ -2001,7 +2004,9 @@ function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
   if(!canvas||!wrap)return;
-  const W=wrap.clientWidth||300,H=wrap.clientHeight||90;
+  // clientWidth/Height can be 0 if called before layout — use parent or fallback
+  const W=wrap.offsetWidth||wrap.parentElement?.offsetWidth||300;
+  const H=wrap.offsetHeight||120;
   canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,W,H);

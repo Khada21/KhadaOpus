@@ -355,7 +355,7 @@
           <button class="ke-close" onclick="closeKaraEditor()" title="Back to Inspector">✕</button>
         </div>
         <!-- Waveform canvas (real audio when available, empty state otherwise) -->
-        <div class="ke-wave-wrap" id="ke-wave-wrap" style="height:90px">
+        <div class="ke-wave-wrap" id="ke-wave-wrap">
           <canvas id="ke-wave-canvas"></canvas>
           <div class="ke-wave-empty" id="ke-wave-empty">No audio · upload a video to see waveform</div>
         </div>
@@ -368,8 +368,8 @@
             <div class="ke-sec-label">Pre-karaoke Color</div>
             <div class="ke-cf">
               <div class="cr">
-                <input type="color" id="kc-pre" value="#5046EC" oninput="karaUpdColor('preColor',this.value);reDrawKaraWave()"/>
-                <input type="range" id="kc-pre-a" min="0" max="100" value="100" oninput="karaUpdColor('preAlpha',+this.value)" title="Opacity (pre-sung)"/>
+                <input type="color" id="kc-pre" value="#5046EC" oninput="karaUpdColor('preColor',this.value);reDrawKaraWave();buildSylStrip()"/>
+                <input type="range" id="kc-pre-a" min="0" max="100" value="100" oninput="karaUpdColor('preAlpha',+this.value);reDrawKaraWave();buildSylStrip()" title="Opacity (pre-sung)"/>
                 <span style="font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap">Opacity</span>
               </div>
               <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:5px">Main color → set via Inspector text color</div>
