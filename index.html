@@ -68,6 +68,8 @@
       <button class="tb-btn" onclick="addSubtitle()">+ Add</button>
       <button class="tb-btn" onclick="showProjectsModal()" title="View all saved projects">✦ Projects</button>
       <button class="tb-btn" onclick="goHome()">↩ New</button>
+      <input type="file" id="topbar-video-input" accept="video/*,audio/*" style="display:none" onchange="loadVideoMidSession(this.files[0]);this.value=''"/>
+      <button class="tb-btn" onclick="document.getElementById('topbar-video-input').click()" title="Load or swap the video without losing your subtitles">▶ Video</button>
       <button class="tb-btn primary" onclick="openExport()">Export ↓</button>
     </div>
   </div>

@@ -402,6 +402,31 @@ function initVideo(url,name,file){
   };
 }
 
+// ── Load / swap video while keeping all subtitles ──
+function loadVideoMidSession(file){
+  if(!file)return;
+  if(!file.type.startsWith('video/')&&!file.type.startsWith('audio/')){
+    alert('( ˘︹˘ ) Please choose a video or audio file');return;
+  }
+  // Pause current playback
+  if(player&&player._video&&!player._video.paused)player.pauseVideo();
+  // Revoke old object URL
+  if(_videoObjectURL)URL.revokeObjectURL(_videoObjectURL);
+  _videoObjectURL=URL.createObjectURL(file);
+  const name=file.name.replace(/\.[^.]+$/,'');
+  // Reset waveform state
+  _waveformPeaks=null;_waveformSamples=null;
+  const wc=document.getElementById('tl-wave-canvas');
+  if(wc){wc.width=0;}
+  const wlbl=document.getElementById('audio-empty-lbl');
+  if(wlbl){wlbl.style.display='';wlbl.textContent='( ✧◡✧ ) Analysing audio…';}
+  // Swap the video — keep subs/tracks unchanged
+  document.getElementById('topbar-title').textContent=name;
+  initVideo(_videoObjectURL,name,file);
+  // Flash save status to confirm
+  _showSaveStatus('▶ Video swapped');
+}
+
 async function _extractWaveform(fileOrUrl){
   const lbl=document.getElementById('audio-empty-lbl');
   if(lbl)lbl.textContent='( ✧◡✧ ) Analysing audio…';
@@ -1860,13 +1885,22 @@ const KARA_COLORS=['#1a3a6e','#1a4a2e','#3a1a5e','#4a2a1a','#1a3a4a','#3a3a1a','
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
 
+function _splitIntoWordSyllables(text,totalMs){
+  // Split into words, attaching trailing spaces to each word — no space-only syllables
+  const raw=text.match(/\S+\s*/g)||[text];
+  const words=raw.filter(w=>w.trim().length>0);
+  if(!words.length)return [{text:text,durMs:totalMs}];
+  const totalChars=words.reduce((a,w)=>a+w.trim().length,0)||1;
+  const syllables=words.map(w=>({text:w,durMs:Math.max(50,Math.round((w.trim().length/totalChars)*totalMs))}));
+  normalizeSylDurs(syllables,totalMs);
+  return syllables;
+}
+
 function applyKaraokeToSub(sub){
   if(hasKaraoke(sub))return;
   const totalMs=sub.endMs-sub.startMs;
-  const words=sub.text.match(/\S+|\s+/g)||[sub.text];
-  const syllables=words.map(w=>({text:w,durMs:Math.max(50,Math.round((w.length/Math.max(1,sub.text.length))*totalMs))}));
-  normalizeSylDurs(syllables,totalMs);
-  sub.karaoke={syllables,preColor:'#5046EC',mainColor:'#FEFEFE',preAlpha:100,mainAlpha:100};
+  const syllables=_splitIntoWordSyllables(sub.text,totalMs);
+  sub.karaoke={syllables,preColor:'#5046EC',preAlpha:100};
   renderBlocks();renderSL();
 }
 
@@ -1962,7 +1996,7 @@ function closeKaraEditor(){
   renderBlocks();
 }
 
-// ── Draw syllable color bands only (no fake waveform) ──
+// ── Draw syllable color bands (unified color, Aegisub-style) ──
 function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
@@ -1976,43 +2010,46 @@ function reDrawKaraWave(){
   if(!sub||!sub.karaoke){ctx.fillStyle='#111114';ctx.fillRect(0,0,W,H);return;}
   const syls=sub.karaoke.syllables;
   const totalMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
+  const preColor=sub.karaoke.preColor||'#5046EC';
 
-  // Draw syllable color bands
+  // Parse preColor to rgb for alpha blending
+  function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return[r,g,b];}
+  const [pr,pg,pb]=hexToRgb(preColor);
+
+  // Draw syllable bands
   let px=0;
   syls.forEach((syl,i)=>{
     const w=(syl.durMs/totalMs)*W;
-    ctx.fillStyle=KARA_COLORS[i%KARA_COLORS.length];
-    ctx.globalAlpha=i===karaSelSyl?0.75:0.45;
+    const isSel=i===karaSelSyl;
+    // Sung (before cursor) = preColor tinted, unsung = neutral dark; selected = brighter
+    ctx.fillStyle=isSel
+      ?`rgba(${pr},${pg},${pb},0.85)`
+      :`rgba(${pr},${pg},${pb},0.28)`;
     ctx.fillRect(Math.floor(px),0,Math.ceil(w),H);
-    ctx.globalAlpha=1;
-    // selected highlight border
-    if(i===karaSelSyl){
-      ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=2;
+    // Selected border
+    if(isSel){
+      ctx.strokeStyle=`rgba(${pr},${pg},${pb},1)`;ctx.lineWidth=2;
       ctx.strokeRect(Math.floor(px)+1,1,Math.ceil(w)-2,H-2);
     }
-    // syllable label
-    ctx.fillStyle='rgba(255,255,255,'+(i===karaSelSyl?'0.95':'0.6')+')';
-    ctx.font='bold '+(H>60?'12':'10')+'px monospace';
+    // Syllable label
+    ctx.fillStyle=isSel?'rgba(255,255,255,0.98)':'rgba(255,255,255,0.55)';
+    ctx.font=`${isSel?'bold ':''}`+(H>60?'12':'10')+'px monospace';
     ctx.textAlign='center';ctx.textBaseline='middle';
     const label=syl.text.trim()||'·';
     ctx.fillText(label.length>8?label.slice(0,7)+'…':label,Math.floor(px)+Math.ceil(w)/2,H/2);
     px+=w;
   });
 
-  // Draw boundary lines — thick and grabbable-looking
+  // Draw boundary lines
   px=0;
   syls.forEach((syl,i)=>{
     px+=(syl.durMs/totalMs)*W;
     if(i<syls.length-1){
-      // Draw a draggable-looking handle: thick white line with arrows
-      ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=3;
+      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;
       ctx.beginPath();ctx.moveTo(Math.round(px),0);ctx.lineTo(Math.round(px),H);ctx.stroke();
-      // Small triangle arrows pointing left and right at midpoint
       const mid=H/2;
-      ctx.fillStyle='rgba(255,255,255,0.8)';
-      // left arrow
+      ctx.fillStyle='rgba(255,255,255,0.75)';
       ctx.beginPath();ctx.moveTo(Math.round(px)-6,mid);ctx.lineTo(Math.round(px)-2,mid-4);ctx.lineTo(Math.round(px)-2,mid+4);ctx.closePath();ctx.fill();
-      // right arrow
       ctx.beginPath();ctx.moveTo(Math.round(px)+6,mid);ctx.lineTo(Math.round(px)+2,mid-4);ctx.lineTo(Math.round(px)+2,mid+4);ctx.closePath();ctx.fill();
     }
   });
@@ -2035,8 +2072,9 @@ function buildSylStrip(){
     seg.className='ke-syl-seg'+(i===karaSelSyl?' sel':'');
     seg.style.left=leftPct+'%';
     seg.style.width=widthPct+'%';
-    seg.style.background=i===karaSelSyl?'#0a5a9e':'#1a3a6e';
-    seg.style.outline=i===karaSelSyl?'2px solid rgba(100,200,255,0.9)':'none';
+    const pc=(sub.karaoke&&sub.karaoke.preColor)||'#5046EC';
+    seg.style.background=i===karaSelSyl?pc:'rgba(80,70,236,0.32)';
+    seg.style.outline=i===karaSelSyl?`2px solid ${pc}`:'none';
     seg.style.outlineOffset='-2px';
     seg.style.color='#fff';
     seg.dataset.idx=i;
@@ -2294,20 +2332,22 @@ function karaDelSel(){
 function karaAutoSplit(){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
-  const words=sub.text.match(/\S+|\s+/g)||[sub.text];
-  const syllables=words.map(w=>({text:w,durMs:Math.max(50,Math.round((w.length/Math.max(1,sub.text.length))*totalMs))}));
-  normalizeSylDurs(syllables,totalMs);
-  sub.karaoke.syllables=syllables;karaSelSyl=null;
+  sub.karaoke.syllables=_splitIntoWordSyllables(sub.text,totalMs);
+  karaSelSyl=null;
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();renderBlocks();renderSL();
 }
 function karaAutoSplitChars(){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
   const raw=[...sub.text];
+  // Attach trailing spaces to the preceding non-space char
   const merged=[];
-  raw.forEach(c=>{if(c===' '&&merged.length>0)merged[merged.length-1]+=c;else merged.push(c);});
-  const chars=merged.filter(s=>s.trim().length>0).length?merged.filter(s=>s.trim().length>0):merged;
-  const syllables=chars.map(c=>({text:c,durMs:Math.max(30,Math.round(totalMs/chars.length))}));
+  raw.forEach(c=>{
+    if(c===' '&&merged.length>0)merged[merged.length-1]+=c;
+    else merged.push(c);
+  });
+  const chars=merged.filter(s=>s.trim().length>0);
+  const syllables=(chars.length?chars:merged).map(c=>({text:c,durMs:Math.max(30,Math.round(totalMs/(chars.length||1)))}));
   normalizeSylDurs(syllables,totalMs);
   sub.karaoke.syllables=syllables;karaSelSyl=null;
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();renderBlocks();renderSL();
