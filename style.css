@@ -341,11 +341,26 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 /* K badge on subtitle list & timeline */
 .sl-k-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:transparent;color:var(--blue);font-size:9px;font-weight:700;font-family:var(--mono);border-radius:2px;cursor:pointer;line-height:1;flex-shrink:0;border:1px solid var(--blue);transition:all .15s;vertical-align:middle}
 .sl-k-btn:hover,.sl-k-btn.active{background:var(--blue);color:#fff}
+
+/* ── Badge row — all effect badges sit inside this flex container ── */
+.blk-badge-row{
+  position:absolute;bottom:3px;right:3px;
+  display:flex;flex-direction:row-reverse;align-items:center;
+  gap:2px;pointer-events:none;z-index:5;
+}
+/* Shared badge base */
+.blk-badge-row>span,
+.blk-badge-row>svg{
+  pointer-events:all;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:2px;cursor:pointer;transition:all .15s;
+  flex-shrink:0;
+}
 /* hollow K on block — filled only when editing */
-.blk-k{position:absolute;bottom:3px;right:3px;display:flex;align-items:center;justify-content:center;width:13px;height:13px;background:transparent;color:var(--blue);font-size:8px;font-weight:700;font-family:var(--mono);border-radius:2px;border:1px solid var(--blue);cursor:pointer;z-index:5;transition:all .15s;pointer-events:all}
+.blk-k{height:13px;width:13px;background:transparent;color:var(--blue);font-size:8px;font-weight:700;font-family:var(--mono);border:1px solid var(--blue);}
 .blk-k:hover,.blk-k.active{background:var(--blue);color:#fff}
 /* Move badge */
-.blk-m{position:absolute;bottom:3px;right:20px;display:flex;align-items:center;justify-content:center;width:13px;height:13px;background:transparent;color:var(--orange);font-size:7px;font-weight:700;font-family:var(--mono);border-radius:2px;border:1px solid var(--orange);cursor:pointer;z-index:5;transition:all .15s;pointer-events:all}
+.blk-m{height:13px;width:13px;background:transparent;color:var(--orange);font-size:7px;font-weight:700;font-family:var(--mono);border:1px solid var(--orange);}
 .blk-m:hover,.blk-m.active{background:var(--orange);color:#000}
 .blk-m svg{width:8px;height:8px}
 
@@ -356,11 +371,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .mv-kf-accel-row input[type=range]{height:3px}
 
 /* FADE EFFECT */
-.blk-fad{position:absolute;bottom:3px;right:59px;display:flex;align-items:center;justify-content:center;width:14px;height:13px;background:transparent;color:#30d158;border-radius:2px;border:1px solid #30d158;cursor:pointer;z-index:5;transition:all .15s;pointer-events:all;padding:0 2px}
+.blk-fad{height:13px;width:14px;background:transparent;color:#30d158;border:1px solid #30d158;padding:0 2px;}
 .blk-fad:hover,.blk-fad.active{background:#30d158;color:#000}
 
 /* MIRROR EFFECT */
-.blk-mir{position:absolute;bottom:3px;right:36px;display:flex;align-items:center;justify-content:center;width:22px;height:13px;background:transparent;color:var(--purple);border-radius:2px;border:1px solid var(--purple);cursor:pointer;z-index:5;transition:all .15s;pointer-events:all;padding:0 2px}
+.blk-mir{height:13px;width:22px;background:transparent;color:var(--purple);border:1px solid var(--purple);padding:0 2px;}
 .blk-mir:hover,.blk-mir.active{background:var(--purple);color:#fff}
 .mir-axis-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);cursor:pointer;border-radius:3px;transition:all .15s;font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 .mir-axis-btn:hover{border-color:var(--purple);color:var(--purple)}
@@ -490,10 +505,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 /* Reverse effect styling */
 .blk-rev {
-  position:absolute;bottom:3px;right:3px;
-  width:18px;height:15px;display:flex;align-items:center;justify-content:center;
-  font-size:7px;font-weight:800;font-family:var(--mono);cursor:pointer;
-  color:#ff6b6b;border:1px solid rgba(255,107,107,.5);border-radius:2px;
+  height:15px;width:18px;
+  font-size:7px;font-weight:800;font-family:var(--mono);
+  color:#ff6b6b;border:1px solid rgba(255,107,107,.5);
   background:rgba(255,107,107,.10);transition:background .15s;
   letter-spacing:.5px;
 }

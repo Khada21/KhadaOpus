@@ -2589,7 +2589,10 @@ renderBlocks=function(){
     el.title=sub.text;
     const _dispTxt=_getDisplayText(sub);
     el.innerHTML=`<div class="sub-block-icon" style="color:${sub.style.textColor||'#ccc'}">T</div><div class="sub-block-text" style="font-weight:${sub.style.bold?700:400};font-style:${sub.style.italic?'italic':'normal'}">${escH(_dispTxt)}</div>`;
-    // K badge: bottom-right, hollow normally, filled when actively editing
+    // ── Effect badges — all sit inside a flex row at bottom-right ──
+    const badgeRow=document.createElement('div');
+    badgeRow.className='blk-badge-row';
+    // K badge (rightmost)
     if(hasKaraoke(sub)){
       const kb=document.createElement('span');
       kb.className='blk-k'+(karaEditId===sub.id?' active':'');
@@ -2598,33 +2601,37 @@ renderBlocks=function(){
       kb.addEventListener('click',e=>{
         e.stopPropagation();
         selId=sub.id;multi.clear();
-        if(karaEditId===sub.id){
-          closeKaraEditor(); // toggle off
-        } else {
-          openKaraEditor(sub.id);
-        }
+        if(karaEditId===sub.id){ closeKaraEditor(); } else { openKaraEditor(sub.id); }
       });
-      el.appendChild(kb);
+      badgeRow.appendChild(kb);
     }
-    // M badge: next to K (or bottom-right if no K), orange
+    // M badge
     if(hasMove(sub)){
       const mb=document.createElement('span');
       mb.className='blk-m'+(moveEditId===sub.id?' active':'');
-      // shift left if K badge also present
-      if(!hasKaraoke(sub))mb.style.right='3px';
       mb.title='Move — click to edit';
       mb.innerHTML='<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="5 9 2 12 5 15"/><polyline points="19 15 22 12 19 9"/></svg>';
       mb.addEventListener('mousedown',e=>{e.stopPropagation();});
       mb.addEventListener('click',e=>{
         e.stopPropagation();
         selId=sub.id;multi.clear();
-        if(moveEditId===sub.id){
-          closeMoveEditor(); // toggle off
-        } else {
-          openMoveEditor(sub.id);
-        }
+        if(moveEditId===sub.id){ closeMoveEditor(); } else { openMoveEditor(sub.id); }
       });
-      el.appendChild(mb);
+      badgeRow.appendChild(mb);
+    }
+    // Mirror badge
+    if(hasMirror(sub)){
+      const xb=document.createElement('span');
+      xb.className='blk-mir'+(mirrorEditId===sub.id?' active':'');
+      xb.title='Mirror — click to edit';
+      xb.innerHTML='<svg width="14" height="10" viewBox="0 0 20 16" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="10" y1="0" x2="10" y2="16" stroke="currentColor" stroke-width="2" stroke-dasharray="2 1.5"/><rect x="1" y="3" width="7" height="10" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="12" y="3" width="7" height="10" rx="1" stroke="currentColor" stroke-width="2" fill="none" opacity="0.4"/></svg>';
+      xb.addEventListener('mousedown',e=>{e.stopPropagation();});
+      xb.addEventListener('click',e=>{
+        e.stopPropagation();
+        selId=sub.id;multi.clear();
+        if(mirrorEditId===sub.id){closeMirrorEditor();} else{openMirrorEditor(sub.id);}
+      });
+      badgeRow.appendChild(xb);
     }
     // Fade badge
     if(hasFade(sub)){
@@ -2637,22 +2644,7 @@ renderBlocks=function(){
         e.stopPropagation();selId=sub.id;multi.clear();
         if(fadeEditId===sub.id){closeFadeEditor();}else{openFadeEditor(sub.id);}
       });
-      el.appendChild(fb);
-    }
-    // Mirror badge
-    if(hasMirror(sub)){
-      const xb=document.createElement('span');
-      xb.className='blk-mir'+(mirrorEditId===sub.id?' active':'');
-      xb.title='Mirror — click to edit';
-      xb.innerHTML='<svg width="14" height="10" viewBox="0 0 20 16" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="10" y1="0" x2="10" y2="16" stroke="currentColor" stroke-width="2" stroke-dasharray="2 1.5"/><rect x="1" y="3" width="7" height="10" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="12" y="3" width="7" height="10" rx="1" stroke="currentColor" stroke-width="2" fill="none" opacity="0.4"/></svg>';
-      xb.addEventListener('mousedown',e=>{e.stopPropagation();});
-      xb.addEventListener('click',e=>{
-        e.stopPropagation();
-        selId=sub.id;multi.clear();
-        if(mirrorEditId===sub.id){closeMirrorEditor();}
-        else{openMirrorEditor(sub.id);}
-      });
-      el.appendChild(xb);
+      badgeRow.appendChild(fb);
     }
     // Reverse badge
     if(hasReverse(sub)){
@@ -2664,12 +2656,12 @@ renderBlocks=function(){
       rv.addEventListener('click',e=>{
         e.stopPropagation();
         selId=sub.id;multi.clear();
-        if(reverseEditId===sub.id){closeReverseEditor();}
-        else{openReverseEditor(sub.id);}
+        if(reverseEditId===sub.id){closeReverseEditor();} else{openReverseEditor(sub.id);}
       });
-      el.appendChild(rv);
+      badgeRow.appendChild(rv);
     }
-    // Compound badge
+    if(badgeRow.children.length) el.appendChild(badgeRow);
+    // Compound badge stays on the left side (not in badge row)
     if(sub._compound&&sub._compound.length){
       const cb=document.createElement('span');
       cb.className='blk-compound'+(sub.id===selId?' active':'');
