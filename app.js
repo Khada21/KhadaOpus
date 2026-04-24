@@ -1,3 +1,5 @@
+
+// handleLoad removed — replaced by handleFileLoad for local video upload
 // ═══════════════ STATE ════════════════
 const DS={bold:false,italic:false,underline:false,font:'Roboto',fontSize:100,textColor:'#ffffff',textAlpha:100,bgColor:'#000000',bgAlpha:60,position:2,customX:null,customY:null,shadowGlow:false,shadowBevel:false,shadowSoft:false,shadowHard:false};
 let subs=[],tracks=[0],selId=null,multi=new Set(),player=null,playing=false,dur=180000,curMs=0,pxS=80,raf=null,drag=null;
@@ -105,68 +107,35 @@ function updUndoRedoBtns(){
 })();
 
 // ═══════════════ LANDING ════════════════
-function exVid(u){for(const p of[/[?&]v=([^&#]+)/,/youtu\.be\/([^?&#]+)/,/shorts\/([^?&#]+)/]){const m=u.match(p);if(m)return m[1];}return u.length===11?u:null;}
-async function handleLoad(){
-  const v=exVid(document.getElementById('url-input').value.trim());
-  if(!v){document.getElementById('proc-status').textContent='( ˘︹˘ ) Invalid URL — try again';return;}
-  document.getElementById('load-btn').disabled=true;
-  document.getElementById('proc-bar').classList.add('active');
-  for(const[p,m] of[[15,'( ✧◡✧ ) Validating...'],[45,'✧ Fetching video...'],[75,'✦ Loading subtitles...'],[100,'( ✧◡✧ ) Ready!']]){
-    await dl(340+Math.random()*260);
-    document.getElementById('proc-fill').style.width=p+'%';
-    document.getElementById('proc-status').textContent=m;
+// File upload entry point — replaces old YouTube URL flow
+function handleFileLoad(file){
+  if(!file) return;
+  if(!file.type.startsWith('video/') && !file.type.startsWith('audio/')){
+    document.getElementById('proc-status').textContent = '( ˘︹˘ ) Please upload a video or audio file';
+    return;
   }
-  await dl(300);
-  document.getElementById('topbar-title').textContent=`youtube.com/watch?v=${v}`;
-  enterEditor(()=>init(v));
-}
-function startBlank(){
-  document.getElementById('topbar-title').textContent='Untitled Project';
-  enterEditor(()=>init(null));
-}
-function enterEditor(cb){
-  document.getElementById('landing').classList.add('out');
-  const ed=document.getElementById('editor');
-  ed.style.opacity='0';
-  ed.style.display='flex';
+  if(_videoObjectURL) URL.revokeObjectURL(_videoObjectURL);
+  _videoObjectURL = URL.createObjectURL(file);
+
+  document.getElementById('proc-bar').classList.add('active');
+  document.getElementById('proc-fill').style.width = '30%';
+  document.getElementById('proc-status').textContent = '✧ Loading video…';
+
   setTimeout(()=>{
-    document.getElementById('landing').style.display='none';
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{ed.classList.add('visible');ed.style.opacity='';cb();}));
-  },600);
+    document.getElementById('proc-fill').style.width = '70%';
+    document.getElementById('proc-status').textContent = '✦ Preparing timeline…';
+    setTimeout(()=>{
+      document.getElementById('proc-fill').style.width = '100%';
+      document.getElementById('proc-status').textContent = '( ✧◡✧ ) Ready!';
+      const name = file.name.replace(/\.[^.]+$/, '');
+      enterEditor(()=>{
+        init(null);
+        initVideo(_videoObjectURL, name, file);
+      });
+    }, 300);
+  }, 300);
 }
-function dl(ms){return new Promise(r=>setTimeout(r,ms));}
-function goHome(){
-  subs=[];tracks=[0];selId=null;multi=new Set();
-  mirrorEditId=null;fadeEditId=null;
-  // Clear overlay pool
-  Object.keys(_ovPool).forEach(id=>{if(_ovPool[id].parentNode)_ovPool[id].parentNode.removeChild(_ovPool[id]);delete _ovPool[id];});
-  Object.keys(_ovStyleCache).forEach(k=>delete _ovStyleCache[k]);
-  if(raf)cancelAnimationFrame(raf);raf=null;
-  playing=false;curMs=0;dur=180000;
-  if(player&&player.destroy){try{player.destroy();}catch(e){}}
-  player=null;
-  document.removeEventListener('keydown',onKey);
-  document.getElementById('editor').classList.remove('visible');
-  document.getElementById('editor').style.display='none';
-  const l=document.getElementById('landing');l.style.display='flex';l.classList.remove('out');
-  document.getElementById('url-input').value='';
-  document.getElementById('proc-bar').classList.remove('active');
-  document.getElementById('proc-fill').style.width='0';
-  document.getElementById('proc-status').textContent='';
-  document.getElementById('load-btn').disabled=false;
-  document.getElementById('play-icon').textContent='▶';
-  // Reset player area — remove iframe + fallback, put back placeholder div
-  const vwrap=document.getElementById('vwrap');
-  const oldPlayer=document.getElementById('yt-player');
-  const oldFb=document.getElementById('yt-fallback');
-  const oldBlocker=document.getElementById('yt-click-blocker');
-  if(oldPlayer)oldPlayer.remove();
-  if(oldFb)oldFb.remove();
-  if(oldBlocker)oldBlocker.remove();
-  const fresh=document.createElement('div');fresh.id='yt-player';
-  vwrap.appendChild(fresh);
-  document.getElementById('no-video-state').style.display='flex';
-}
+
 
 // ═══════════════ INIT ════════════════
 function init(v){
@@ -182,7 +151,7 @@ function init(v){
   document.getElementById('tl-ruler').addEventListener('mousedown',rulerDown);
   document.addEventListener('keydown',onKey);
   window.addEventListener('resize',()=>{if(pxS<=fitPxS()*1.05){pxS=fitPxS();syncZ();}renderTL();});
-  if(v)initYT(v);
+  // Video is loaded separately via handleFileLoad
 }
 function mkSub(s,e,t,tr,ov){return{id:uid(),startMs:s,endMs:e,text:t,track:tr,style:{...DS,...ov}};}
 function loadDemos(){
@@ -200,110 +169,73 @@ function loadDemos(){
 }
 
 
-// ═══════════════ YOUTUBE ════════════════
-// Uses YouTube IFrame API so we can sync curMs to the real player time.
-let _ytApiReady=false, _ytPendingVideo=null;
+// ═══════════════ VIDEO PLAYER ════════════════
+// Uses HTML5 <video> element — local file via createObjectURL.
+// Full audio access via Web Audio API for real waveform.
 
-// Called by YouTube's IFrame API script when it has loaded
-window.onYouTubeIframeAPIReady=function(){
-  _ytApiReady=true;
-  if(_ytPendingVideo)_createYTPlayer(_ytPendingVideo);
-};
+let _videoObjectURL = null;
+let _audioObjectURL = null;
+let _ytSyncTimer = null;
 
-function initYT(v){
-  document.getElementById('no-video-state').style.display='none';
-
-  // Show fallback container (hidden until needed)
-  const oldFb=document.getElementById('yt-fallback');
-  if(oldFb)oldFb.remove();
-  const fb=document.createElement('div');
-  fb.id='yt-fallback';
-  fb.style.cssText='display:none;position:absolute;inset:0;z-index:2;background:#0a0a0b;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
-  fb.innerHTML=`
-    <div style="font-size:28px;opacity:.3">📺</div>
-    <div style="font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:1px;text-align:center;line-height:1.8">
-      ( ˘︹˘ ) VIDEO BLOCKED IN THIS ENVIRONMENT<br>
-      <span style="font-size:10px;opacity:.6">Open this file locally in your browser ✧</span>
-    </div>
-    <a href="https://www.youtube.com/watch?v=${v}" target="_blank"
-       style="margin-top:4px;padding:7px 18px;border:1px solid var(--red);color:var(--red);font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none;transition:background .15s;"
-       onmouseover="this.style.background='rgba(255,59,48,.12)'" onmouseout="this.style.background=''"
-    >Open on YouTube ↗</a>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-      <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">✧ Set video duration:</span>
-      <input id="dur-input" type="text" value="3:00" placeholder="m:ss"
-        style="width:60px;background:var(--panel2);border:1px solid var(--border2);padding:3px 6px;font-family:var(--mono);font-size:11px;color:var(--text);outline:none;text-align:center;"
-        onchange="setDurFromInput(this.value)" title="Set video duration for accurate timeline"/>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">for timeline</span>
-    </div>`;
-  document.getElementById('vwrap').appendChild(fb);
-
-  // Destroy any previous YT.Player instance
-  if(player&&player.destroy){try{player.destroy();}catch(e){}}
-  player=null;
-
-  // Ensure the target div exists (YT.Player replaces it with an iframe)
-  const vwrap=document.getElementById('vwrap');
-  let ph=document.getElementById('yt-player');
-  if(ph&&ph.tagName==='IFRAME'){ph.remove();ph=null;}
-  if(!ph){ph=document.createElement('div');ph.id='yt-player';vwrap.appendChild(ph);}
-  ph.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
-
-  if(_ytApiReady){
-    _createYTPlayer(v);
-  } else {
-    _ytPendingVideo=v;
-    // Load the IFrame API script if not already loading
-    if(!document.getElementById('yt-api-script')){
-      const s=document.createElement('script');
-      s.id='yt-api-script';
-      s.src='https://www.youtube.com/iframe_api';
-      document.head.appendChild(s);
-    }
-    // Fallback: if API never loads (blocked), show fallback after 6s
-    setTimeout(()=>{if(!_ytApiReady)fb.style.display='flex';},6000);
-  }
+function handleFileLoad(file){
+  if(!file) return;
+  if(_videoObjectURL) URL.revokeObjectURL(_videoObjectURL);
+  _videoObjectURL = URL.createObjectURL(file);
+  document.getElementById('proc-bar').classList.add('active');
+  document.getElementById('proc-fill').style.width = '40%';
+  document.getElementById('proc-status').textContent = '✧ Loading video…';
+  setTimeout(()=>{
+    document.getElementById('proc-fill').style.width = '80%';
+    document.getElementById('proc-status').textContent = '✦ Preparing timeline…';
+    setTimeout(()=>{
+      document.getElementById('proc-fill').style.width = '100%';
+      document.getElementById('proc-status').textContent = '( ✧◡✧ ) Ready!';
+      const name = file.name.replace(/\.[^.]+$/, '');
+      enterEditor(()=>{
+        init(null);
+        initVideo(_videoObjectURL, name, file);
+      });
+    }, 350);
+  }, 350);
 }
 
-function _createYTPlayer(v){
-  _ytPendingVideo=null;
-  const fb=document.getElementById('yt-fallback');
-  new YT.Player('yt-player',{
-    videoId:v,
-    playerVars:{
-      autoplay:0,
-      controls:1,          // must be 1 — YouTube blocks video render if controls=0
-      modestbranding:1,
-      rel:0,
-      cc_load_policy:0,
-      iv_load_policy:3,
-      disablekb:0,
-      playsinline:1,
-    },
-    events:{
-      onReady(e){
-        player=e.target;
-        // Set duration from video
-        const d=player.getDuration();
-        if(d&&d>0){dur=Math.round(d*1000);document.getElementById('dur-t').textContent=msToDisp(dur);renderTL();}
-        if(fb)fb.style.display='none';
-        // Add transparent click-blocker so mouse events don't fall into the YT iframe
-        const vwrap=document.getElementById('vwrap');
-        let blocker=document.getElementById('yt-click-blocker');
-        if(!blocker){blocker=document.createElement('div');blocker.id='yt-click-blocker';vwrap.appendChild(blocker);}
-        // Draw waveform placeholder now that video is loaded
-        _drawFakeWaveform();
-      },
-      onStateChange(e){
-        // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-        const s=e.data;
-        if(s===1){playing=true;document.getElementById('play-icon').textContent='⏸';}
-        else if(s===0||s===2){playing=false;document.getElementById('play-icon').textContent='▶';}
-      },
-      onError(){if(fb)fb.style.display='flex';}
-    }
-  });
+function initVideo(url, name, file){
+  document.getElementById('topbar-title').textContent = name || 'Video';
+  document.getElementById('no-video-state').style.display = 'none';
+
+  const vid = document.getElementById('yt-player');
+  vid.src = url;
+  vid.style.display = 'block';
+  vid.volume = (document.getElementById('vol-sl')?.value || 80) / 100;
+
+  vid.addEventListener('loadedmetadata', ()=>{
+    dur = Math.round(vid.duration * 1000);
+    document.getElementById('dur-t').textContent = msToDisp(dur);
+    renderTL();
+    // Extract real waveform from the file
+    _extractWaveformFromFile(file || url);
+  }, {once: true});
+
+  vid.addEventListener('play',  ()=>{ playing = true;  document.getElementById('play-icon').textContent = '⏸'; });
+  vid.addEventListener('pause', ()=>{ playing = false; document.getElementById('play-icon').textContent = '▶'; });
+  vid.addEventListener('ended', ()=>{ playing = false; document.getElementById('play-icon').textContent = '▶'; });
+
+  player = {
+    _video: vid,
+    _v: name,
+    seekTo(s){ vid.currentTime = s; },
+    playVideo(){ vid.play(); },
+    pauseVideo(){ vid.pause(); },
+    getPlayerState(){ return vid.paused ? 2 : 1; },
+    getDuration(){ return vid.duration || 0; },
+    setVolume(v){ vid.volume = v / 100; },
+    destroy(){ vid.pause(); vid.src = ''; vid.style.display = 'none'; }
+  };
 }
+
+// onYouTubeIframeAPIReady stub (keep to avoid errors if script tag still loaded)
+window.onYouTubeIframeAPIReady = function(){};
+
 
 function setDurFromInput(val){
   const parts=val.split(':');
@@ -313,18 +245,17 @@ function setDurFromInput(val){
   renderTL();
 }
 function togglePlay(){
-  if(player&&player.getPlayerState){
-    const s=player.getPlayerState();
-    if(s===1){player.pauseVideo();}else{player.playVideo();}
-    // playing flag is updated by onStateChange
+  if(player&&player.pauseVideo){
+    if(playing) player.pauseVideo();
+    else player.playVideo();
   } else {
-    playing=!playing;
-    document.getElementById('play-icon').textContent=playing?'⏸':'▶';
+    playing = !playing;
+    document.getElementById('play-icon').textContent = playing ? '⏸' : '▶';
   }
 }
 function skipTime(s){
-  curMs=Math.max(0,Math.min(dur,curMs+s*1000));
-  if(player&&player.seekTo)player.seekTo(curMs/1000,true);
+  curMs = Math.max(0, Math.min(dur, curMs + s * 1000));
+  if(player&&player.seekTo) player.seekTo(curMs / 1000);
 }
 
 // ═══════════════ RAF + PERFORMANCE ════════════════
@@ -378,285 +309,179 @@ const posCSS_map={
   9:{top:'8px',right:'5%',left:'auto',bottom:'',transform:'none'}
 };
 
-// ═══════════════ WAVEFORM ════════════════
-// Fetches real audio waveform data using Web Audio API.
-// Tries to decode audio from a CORS-enabled proxy; falls back to seeded fake.
+// ═══════════════ RAF LOOP ════════════════
+let _lastT = 0;
+function startRaf(){
+  if(raf) cancelAnimationFrame(raf);
+  _lastT = performance.now();
+  function loop(now){
+    raf = requestAnimationFrame(loop);
+    const dt = Math.min(now - _lastT, 100);
+    _lastT = now;
 
-let _waveformPeaks = null; // Float32Array of normalised peak values (0..1)
-let _waveformVideoId = null;
+    // Sync curMs from HTML5 video element if available
+    if(player && player._video && !player._video.paused){
+      const ct = player._video.currentTime * 1000;
+      if(isFinite(ct)) curMs = ct;
+    } else if(playing){
+      curMs += dt;
+      if(curMs >= dur){ curMs = dur; playing = false; document.getElementById('play-icon').textContent = '▶'; }
+    }
 
-function _drawFakeWaveform(){
-  const audioRow = document.getElementById('audio-track');
-  if(!audioRow) return;
-  let tlCanvas = document.getElementById('tl-wave-canvas');
-  if(tlCanvas) tlCanvas.remove();
-  const lbl = audioRow.querySelector('.audio-empty-lbl');
-  if(lbl) lbl.style.display = 'none';
-  tlCanvas = document.createElement('canvas');
-  tlCanvas.id = 'tl-wave-canvas';
-  audioRow.appendChild(tlCanvas);
+    // Throttle overlay rendering to preview fps
+    const ovDue = _fpsInterval <= 0 || (now - _lastOvRender) >= _fpsInterval;
+    if(ovDue){ _lastOvRender = now; renderOverlays(); }
 
-  const vid = player && player.getVideoData ? player.getVideoData().video_id : null;
-  if(vid && vid !== _waveformVideoId){
-    _waveformVideoId = vid;
-    _waveformPeaks = null;
-    _fetchWaveform(vid).then(peaks => {
-      _waveformPeaks = peaks;
-      _renderTLWave(document.getElementById('tl-wave-canvas'));
-      if(karaEditId) reDrawKaraWave();
-    });
-  } else {
-    _renderTLWave(tlCanvas);
+    // Always update timecode and cursor
+    const curEl = document.getElementById('cur-t');
+    if(curEl) curEl.textContent = msToDisp(curMs);
+    _hlActiveFast();
+
+    if(_justSeeked){ const scEl = document.getElementById('tl-scroll'); scEl && (scEl.scrollLeft = Math.max(0, curMs/1000*pxS - scEl.clientWidth/2)); _justSeeked = false; }
   }
-
-  const waveEmpty = document.getElementById('ke-wave-empty');
-  if(waveEmpty) waveEmpty.style.display = 'none';
+  raf = requestAnimationFrame(loop);
 }
 
-async function _fetchWaveform(videoId){
-  // Try fetching via a public CORS-enabled audio proxy and decode with Web Audio API
-  // Multiple fallback proxy URLs
-  const proxies = [
-    `https://pipedapi.kavin.rocks/streams/${videoId}`,
-    `https://api.piped.projectsegfau.lt/streams/${videoId}`,
-  ];
-  for(const url of proxies){
-    try{
-      const res = await fetch(url, {headers:{Accept:'application/json'}});
-      if(!res.ok) continue;
-      const data = await res.json();
-      // Find the lowest-quality audio stream to minimise download
-      const streams = (data.audioStreams||[]).sort((a,b)=>(a.bitrate||0)-(b.bitrate||0));
-      const stream = streams[0];
-      if(!stream||!stream.url) continue;
-      // Fetch audio bytes (may fail CORS depending on host)
-      const audioRes = await fetch(stream.url);
-      if(!audioRes.ok) continue;
-      const buf = await audioRes.arrayBuffer();
-      const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-      const decoded = await audioCtx.decodeAudioData(buf);
-      audioCtx.close();
-      return _extractPeaks(decoded);
-    } catch(e){ /* try next proxy */ }
+// ═══════════════ WAVEFORM ════════════════
+// Real waveform from local video/audio file via Web Audio API.
+
+let _waveformPeaks = null;
+let _waveformVideoId = null;
+
+async function _extractWaveformFromFile(fileOrUrl){
+  try{
+    const lbl = document.getElementById('audio-empty-lbl');
+    if(lbl) lbl.textContent = '( ✧◡✧ ) Analysing audio…';
+
+    let arrayBuffer;
+    if(fileOrUrl instanceof File){
+      arrayBuffer = await fileOrUrl.arrayBuffer();
+    } else {
+      const res = await fetch(fileOrUrl);
+      arrayBuffer = await res.arrayBuffer();
+    }
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+
+    _waveformPeaks = _extractPeaks(decoded);
+    _drawWaveforms();
+  } catch(e){
+    console.warn('Waveform decode failed:', e);
+    // Fall back to seed-based fake
+    _waveformPeaks = _seedPeaks('x', Math.ceil((dur||180000)/50));
+    _drawWaveforms();
   }
-  // All proxies failed — return seeded fake peaks
-  return _seedPeaks(videoId, Math.ceil((dur||180000)/50));
 }
 
 function _extractPeaks(audioBuffer){
-  // Downsample to one peak per ~50ms
+  // Mix down all channels, extract one RMS peak per 50ms
   const sampleRate = audioBuffer.sampleRate;
-  const ch = audioBuffer.getChannelData(0);
-  const samplesPerPeak = Math.floor(sampleRate * 0.05); // 50ms
-  const nPeaks = Math.ceil(ch.length / samplesPerPeak);
-  const peaks = new Float32Array(nPeaks);
-  for(let i=0; i<nPeaks; i++){
-    let max = 0;
-    const s = i*samplesPerPeak, e = Math.min(s+samplesPerPeak, ch.length);
-    for(let j=s; j<e; j++) max = Math.max(max, Math.abs(ch[j]));
-    peaks[i] = max;
+  const samplesPerPeak = Math.floor(sampleRate * 0.05);
+  const nCh = audioBuffer.numberOfChannels;
+  // Mix channels into one array
+  const len = audioBuffer.length;
+  const mixed = new Float32Array(len);
+  for(let c = 0; c < nCh; c++){
+    const ch = audioBuffer.getChannelData(c);
+    for(let i = 0; i < len; i++) mixed[i] += ch[i] / nCh;
   }
-  // Normalise
-  const peak = Math.max(...peaks, 0.001);
-  return peaks.map(v => v/peak);
+  const nPeaks = Math.ceil(len / samplesPerPeak);
+  const peaks = new Float32Array(nPeaks);
+  for(let i = 0; i < nPeaks; i++){
+    let sum = 0;
+    const s = i * samplesPerPeak;
+    const e = Math.min(s + samplesPerPeak, len);
+    for(let j = s; j < e; j++) sum += mixed[j] * mixed[j];
+    peaks[i] = Math.sqrt(sum / (e - s)); // RMS
+  }
+  // Normalise to 0..1
+  const max = Math.max(...peaks, 0.001);
+  return peaks.map(v => Math.min(1, v / max));
 }
 
 function _seedPeaks(seed, n){
   let r = 0;
-  for(let i=0;i<seed.length;i++) r = (r*31+seed.charCodeAt(i))&0xfffffff;
-  function rand(){ r=(r*1664525+1013904223)&0xfffffff; return r/0xfffffff; }
+  for(let i = 0; i < seed.length; i++) r = (r * 31 + seed.charCodeAt(i)) & 0xfffffff;
+  function rand(){ r = (r * 1664525 + 1013904223) & 0xfffffff; return r / 0xfffffff; }
   const peaks = new Float32Array(n);
   let prev = 0.4;
-  for(let i=0;i<n;i++){
-    prev = Math.max(0.05, Math.min(1, prev+(rand()-0.5)*0.35));
+  for(let i = 0; i < n; i++){
+    prev = Math.max(0.05, Math.min(1, prev + (rand() - 0.5) * 0.35));
     peaks[i] = prev;
   }
   return peaks;
 }
 
-function _renderTLWave(canvas){
-  if(!canvas || !dur) return;
-  const row = canvas.parentElement;
-  if(!row) return;
-  const W = Math.max(row.scrollWidth||1, Math.round(dur/1000*pxS));
+function _drawWaveforms(){
+  _renderTLWave();
+  const waveEmpty = document.getElementById('ke-wave-empty');
+  if(waveEmpty) waveEmpty.style.display = 'none';
+  if(karaEditId) reDrawKaraWave();
+  const lbl = document.getElementById('audio-empty-lbl');
+  if(lbl) lbl.style.display = 'none';
+}
+
+function _drawFakeWaveform(){
+  // Called when video loads before waveform is decoded
+  const lbl = document.getElementById('audio-empty-lbl');
+  if(lbl){ lbl.style.display = 'none'; }
+  let c = document.getElementById('tl-wave-canvas');
+  if(!c){
+    const row = document.getElementById('audio-track');
+    c = document.createElement('canvas');
+    c.id = 'tl-wave-canvas';
+    row.appendChild(c);
+  }
+  _renderTLWave();
+}
+
+function _renderTLWave(){
+  const row = document.getElementById('audio-track');
+  if(!row || !dur) return;
+
+  let canvas = document.getElementById('tl-wave-canvas');
+  if(!canvas){
+    canvas = document.createElement('canvas');
+    canvas.id = 'tl-wave-canvas';
+    row.appendChild(canvas);
+  }
+
+  const W = Math.max(Math.round(dur / 1000 * pxS), row.clientWidth || 300);
   const H = row.clientHeight || 64;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0,0,W,H);
+  ctx.clearRect(0, 0, W, H);
 
-  const peaks = _waveformPeaks || _seedPeaks(_waveformVideoId||'x', Math.ceil((dur||180000)/50));
-  const mid = H/2;
+  const peaks = _waveformPeaks || _seedPeaks('x', Math.ceil(dur / 50));
+  const mid = H / 2;
+
   ctx.beginPath();
-  for(let x=0; x<W; x++){
-    const t = x/W;
-    const pi = Math.min(peaks.length-1, Math.floor(t*peaks.length));
-    const amp = peaks[pi]*mid*0.9;
-    if(x===0) ctx.moveTo(x, mid-amp); else ctx.lineTo(x, mid-amp);
+  for(let x = 0; x < W; x++){
+    const t = x / W;
+    const pi = Math.min(peaks.length - 1, Math.floor(t * peaks.length));
+    const amp = peaks[pi] * mid * 0.92;
+    if(x === 0) ctx.moveTo(x, mid - amp); else ctx.lineTo(x, mid - amp);
   }
-  for(let x=W-1; x>=0; x--){
-    const t = x/W;
-    const pi = Math.min(peaks.length-1, Math.floor(t*peaks.length));
-    const amp = peaks[pi]*mid*0.9;
-    ctx.lineTo(x, mid+amp);
+  for(let x = W - 1; x >= 0; x--){
+    const t = x / W;
+    const pi = Math.min(peaks.length - 1, Math.floor(t * peaks.length));
+    const amp = peaks[pi] * mid * 0.92;
+    ctx.lineTo(x, mid + amp);
   }
   ctx.closePath();
   ctx.fillStyle = 'rgba(48,209,88,0.18)';
   ctx.fill();
-  ctx.strokeStyle = 'rgba(48,209,88,0.65)';
+  ctx.strokeStyle = 'rgba(48,209,88,0.7)';
   ctx.lineWidth = 1;
   ctx.stroke();
 }
 
 function _refreshWave(){
-  const c = document.getElementById('tl-wave-canvas');
-  if(c) _renderTLWave(c);
+  if(_waveformPeaks || dur) _renderTLWave();
 }
 
-function startRaf(){
-  let last=performance.now();
-  const phEl=document.getElementById('tl-ph');
-  const curTEl=document.getElementById('cur-t');
-  const tcEl=document.getElementById('tl-tc');
-  const scEl=document.getElementById('tl-scroll');
-  const vwrap=document.getElementById('vwrap');
-
-  (function loop(now){
-    const dt=now-last;last=now;
-
-    // Sync curMs from real YT player; fall back to wall-clock only if no player
-    if(player&&player.getCurrentTime){
-      try{
-        const ct=player.getCurrentTime()*1000;
-        if(isFinite(ct))curMs=ct;
-      }catch(e){}
-    } else if(playing){
-      curMs+=dt;
-      if(curMs>=dur){curMs=dur;playing=false;document.getElementById('play-icon').textContent='▶';}
-    }
-
-    // ── Playhead ──
-    const x=ms2x(curMs);
-    phEl.style.transform=`translateX(${x}px)`;
-    if(_justSeeked){scEl&&(scEl.scrollLeft=Math.max(0,x-scEl.clientWidth/2));_justSeeked=false;}
-    else if(scEl&&x>scEl.scrollLeft+scEl.clientWidth*.8){scEl.scrollLeft=x-scEl.clientWidth*.2;}
-
-    // ── Timecode (always) ──
-    curTEl.textContent=msToDisp(curMs);
-    tcEl.textContent=msToHMS(curMs);
-
-    // ── Overlay + hlActive throttled by FPS ──
-    const sinceLastOv=now-_lastOvRender;
-    if(_fpsInterval===0||sinceLastOv>=_fpsInterval){
-      _lastOvRender=now;
-      _updOvFast(vwrap);
-      _hlActiveFast();
-    }
-
-    raf=requestAnimationFrame(loop);
-  })(performance.now());
-}
-
-function _updOvFast(vwrap){
-  const active=subs.filter(s=>curMs>=s.startMs&&curMs<=s.endMs);
-  const activeIds=new Set(active.map(s=>s.id));
-
-  // Hide divs for subs no longer active
-  Object.keys(_ovPool).forEach(id=>{
-    if(!activeIds.has(id)&&_ovPool[id].parentNode){
-      _ovPool[id].parentNode.removeChild(_ovPool[id]);
-      delete _ovStyleCache[id];
-    }
-  });
-
-  if(!active.length)return;
-  active.sort((a,b)=>a.track-b.track);
-
-  active.forEach((s,gi)=>{
-    const el=_getOvEl(s.id);
-    const st=s.style;
-
-    // Append if not in DOM
-    if(!el.parentNode)vwrap.appendChild(el);
-
-    // Update style only if changed
-    const newBase=_getBaseStyle(s,gi);
-    if(newBase)el.style.cssText='position:absolute;pointer-events:none;border-radius:2px;padding:5px 14px;max-width:82%;text-align:center;white-space:pre-wrap;will-change:transform;'+newBase;
-
-    // ── Position — always clear all props first to avoid stale values ──
-    el.style.left=''; el.style.right=''; el.style.top=''; el.style.bottom=''; el.style.transform='';
-    if(s.move&&s.move.keyframes&&s.move.keyframes.length>=2){
-      const subDur=s.endMs-s.startMs;
-      const elapsed=Math.max(0,Math.min(subDur,curMs-s.startMs));
-      const tG=subDur>0?elapsed/subDur:0;
-      const kfs=s.move.keyframes;
-      const segCount=kfs.length-1;
-      const segT=tG*segCount;
-      const segIdx=Math.min(Math.floor(segT),segCount-1);
-      const a=kfs[segIdx],b=kfs[segIdx+1];
-      const et=mvEaseT(segT-segIdx,a.accel||0,a.decel||0,a.ease);
-      const mx=mvBezierPoint(a.x,a.cp1x,b.cp2x,b.x,et);
-      const my=mvBezierPoint(a.y,a.cp1y,b.cp2y,b.y,et);
-      el.style.left=mx.toFixed(2)+'%';
-      el.style.top=my.toFixed(2)+'%';
-      el.style.transform='translate(-50%,-50%)';
-    } else if(st.customX!=null&&st.customY!=null){
-      el.style.left=st.customX+'%';
-      el.style.top=st.customY+'%';
-      el.style.transform='translate(-50%,-50%)';
-    } else {
-      const pc=posCSS_map[st.position||2]||posCSS_map[2];
-      el.style.left=pc.left||'';
-      el.style.right=pc.right||'';
-      el.style.top=pc.top||'';
-      el.style.bottom=pc.bottom||'';
-      el.style.transform=pc.transform||'';
-    }
-
-    // ── Text / karaoke — only update when needed ──
-    if(hasKaraoke(s)){
-      const kd=s.karaoke,syls=kd.syllables;
-      const elapsed=curMs-s.startMs;
-      const mainColor=ha(st.textColor,st.textAlpha);
-      const preColor=ha(kd.preColor||'#5046EC',kd.preAlpha??100);
-      let cumMs=0,asi=-1;
-      for(let i=0;i<syls.length;i++){if(elapsed>=cumMs&&elapsed<cumMs+syls[i].durMs){asi=i;break;}cumMs+=syls[i].durMs;}
-      if(asi===-1&&elapsed>=cumMs)asi=syls.length;
-      let html='';
-      syls.forEach((syl,i)=>{html+=`<span style="color:${i<=asi?preColor:mainColor}">${escH(syl.text)}</span>`;});
-      el.innerHTML=html;
-    } else {
-      if(el.textContent!==s.text){el.textContent=s.text;}
-    }
-  });
-
-  // Render mirror ghosts for active subs that have mirror effect
-  // First remove stale ghosts
-  vwrap.querySelectorAll('.sub-mirror-ghost').forEach(g=>{
-    if(!activeIds.has(g.dataset.mirrorFor))g.remove();
-  });
-  active.forEach(s=>{
-    if(!hasMirror(s))return;
-    // Remove old ghost and redraw (cheap, ghosts are simple)
-    vwrap.querySelectorAll(`.sub-mirror-ghost[data-mirror-for="${s.id}"]`).forEach(g=>g.remove());
-    _renderMirrorOverlay(s,vwrap);
-  });
-}
-
-function _hlActiveFast(){
-  subs.forEach(s=>{
-    const el=_blockMap.get(s.id);if(!el)return;
-    const on=curMs>=s.startMs&&curMs<=s.endMs&&s.id!==selId&&!multi.has(s.id);
-    if(on!==el._wasActive){el.classList.toggle('active',on);el._wasActive=on;}
-  });
-}
-
-let _justSeeked=false;
-function updOv(){_updOvFast(document.getElementById('vwrap'));} // compat shim
-function hlActive(){_hlActiveFast();} // compat shim
-function updPH(){
-  const x=ms2x(curMs);
-  document.getElementById('tl-ph').style.transform=`translateX(${x}px)`;
-}
 
 // ═══════════════ TRACKS ════════════════
 // Auto-assign: given a subtitle, find the lowest track where it doesn't overlap anything else
@@ -943,13 +768,9 @@ function getRulerMs(e){
   return Math.max(0,Math.min(dur,x2ms(x)));
 }
 function seekTo(ms){
-  curMs=Math.max(0,Math.min(dur,ms));
-  _justSeeked=true;
-  if(player&&player.seekTo){
-    player.seekTo(curMs/1000,true);
-    // Resume playing state visually if was playing
-    if(playing&&player.playVideo)player.playVideo();
-  }
+  curMs = Math.max(0, Math.min(dur, ms));
+  _justSeeked = true;
+  if(player&&player.seekTo) player.seekTo(curMs / 1000);
 }
 function rulerDown(e){
   e.preventDefault();
@@ -1536,7 +1357,7 @@ function openKaraEditor(id){
     if(kpre)kpre.value=sub.karaoke.preColor||'#5046EC';
     if(kprea)kprea.value=sub.karaoke.preAlpha??100;
   }
-  const hasAudio=!!(player&&player.getDuration&&player.getDuration()>0);
+  const hasAudio=!!_waveformPeaks;
   const waveEmpty=document.getElementById('ke-wave-empty');
   if(waveEmpty)waveEmpty.style.display=hasAudio?'none':'flex';
   reDrawKaraWave();
@@ -3901,4 +3722,22 @@ function fadeSetOut(v){
       return msg;
     }
   });
+})();
+
+// ── Drop zone drag & drop ──
+(function(){
+  function ready(){
+    const zone = document.getElementById('upload-drop-zone');
+    if(!zone) return;
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if(file) handleFileLoad(file);
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ready);
+  else ready();
 })();
