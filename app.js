@@ -142,7 +142,9 @@ function goHome(){
   Object.keys(_ovPool).forEach(id=>{if(_ovPool[id].parentNode)_ovPool[id].parentNode.removeChild(_ovPool[id]);delete _ovPool[id];});
   Object.keys(_ovStyleCache).forEach(k=>delete _ovStyleCache[k]);
   if(raf)cancelAnimationFrame(raf);raf=null;
-  playing=false;curMs=0;dur=180000;player=null;
+  playing=false;curMs=0;dur=180000;
+  if(player&&player.destroy){try{player.destroy();}catch(e){}}
+  player=null;
   document.removeEventListener('keydown',onKey);
   document.getElementById('editor').classList.remove('visible');
   document.getElementById('editor').style.display='none';
@@ -197,29 +199,21 @@ function loadDemos(){
 
 
 // ═══════════════ YOUTUBE ════════════════
-// Uses a plain <iframe> embed — works from file:// and any browser.
-// If the iframe can't load (sandboxed env), shows a fallback with YouTube link.
+// Uses YouTube IFrame API so we can sync curMs to the real player time.
+let _ytApiReady=false, _ytPendingVideo=null;
+
+// Called by YouTube's IFrame API script when it has loaded
+window.onYouTubeIframeAPIReady=function(){
+  _ytApiReady=true;
+  if(_ytPendingVideo)_createYTPlayer(_ytPendingVideo);
+};
+
 function initYT(v){
   document.getElementById('no-video-state').style.display='none';
-  // Build or replace the iframe
-  let iframe=document.getElementById('yt-player');
-  if(!iframe||iframe.tagName!=='IFRAME'){
-    const container=document.getElementById('vwrap');
-    if(iframe)iframe.remove();
-    iframe=document.createElement('iframe');
-    iframe.id='yt-player';
-    container.appendChild(iframe);
-  }
-  iframe.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:none;display:block;z-index:1;';
-  iframe.allow='autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write';
-  iframe.allowFullscreen=true;
-  // enablejsapi=0 keeps it simple (no postMessage needed); origin param helps YouTube allowlist us
-  const origin=encodeURIComponent(location.origin||'');
-  iframe.src=`https://www.youtube.com/embed/${v}?autoplay=0&controls=1&modestbranding=1&rel=0&cc_load_policy=0&iv_load_policy=3${origin?'&origin='+origin:''}`;
 
-  // Show fallback if iframe fails (e.g. sandboxed environment like claude.ai preview)
-  const fallback=document.getElementById('yt-fallback');
-  if(fallback)fallback.remove();
+  // Show fallback container (hidden until needed)
+  const oldFb=document.getElementById('yt-fallback');
+  if(oldFb)oldFb.remove();
   const fb=document.createElement('div');
   fb.id='yt-fallback';
   fb.style.cssText='display:none;position:absolute;inset:0;z-index:2;background:#0a0a0b;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
@@ -242,24 +236,67 @@ function initYT(v){
     </div>`;
   document.getElementById('vwrap').appendChild(fb);
 
-  // Check if iframe loaded; if it errors or stays empty, show fallback.
-  // 5000ms gives enough time for YouTube to load even on slow connections.
-  let loaded=false;
-  iframe.onload=()=>{ loaded=true; };
-  setTimeout(()=>{
-    if(!loaded){fb.style.display='flex';}
-    else{
-      // Even if onload fired, youtube might show an error page — check with a secondary test
-      try{
-        const doc=iframe.contentDocument||iframe.contentWindow?.document;
-        if(!doc||doc.body?.innerHTML===''){fb.style.display='flex';}
-      } catch(e){
-        // SecurityError = cross-origin = YouTube loaded fine. Keep fallback hidden.
-      }
-    }
-  },5000);
+  // Destroy any previous YT.Player instance
+  if(player&&player.destroy){try{player.destroy();}catch(e){}}
+  player=null;
 
-  player={_iframe:true,_v:v};
+  // Ensure the target div exists (YT.Player replaces it with an iframe)
+  const vwrap=document.getElementById('vwrap');
+  let ph=document.getElementById('yt-player');
+  if(ph&&ph.tagName==='IFRAME'){ph.remove();ph=null;}
+  if(!ph){ph=document.createElement('div');ph.id='yt-player';vwrap.appendChild(ph);}
+  ph.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
+
+  if(_ytApiReady){
+    _createYTPlayer(v);
+  } else {
+    _ytPendingVideo=v;
+    // Load the IFrame API script if not already loading
+    if(!document.getElementById('yt-api-script')){
+      const s=document.createElement('script');
+      s.id='yt-api-script';
+      s.src='https://www.youtube.com/iframe_api';
+      document.head.appendChild(s);
+    }
+    // Fallback: if API never loads (blocked), show fallback after 6s
+    setTimeout(()=>{if(!_ytApiReady)fb.style.display='flex';},6000);
+  }
+}
+
+function _createYTPlayer(v){
+  _ytPendingVideo=null;
+  const fb=document.getElementById('yt-fallback');
+  new YT.Player('yt-player',{
+    videoId:v,
+    playerVars:{
+      autoplay:0,
+      controls:0,          // hide YouTube controls — we use our own
+      modestbranding:1,
+      rel:0,
+      cc_load_policy:0,
+      iv_load_policy:3,
+      disablekb:1,         // disable YouTube keyboard shortcuts (we handle keys)
+      fs:0,                // hide fullscreen button (no controls anyway)
+      showinfo:0,
+      playsinline:1,
+    },
+    events:{
+      onReady(e){
+        player=e.target;
+        // Set duration from video
+        const d=player.getDuration();
+        if(d&&d>0){dur=Math.round(d*1000);document.getElementById('dur-t').textContent=msToDisp(dur);renderTL();}
+        if(fb)fb.style.display='none';
+      },
+      onStateChange(e){
+        // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+        const s=e.data;
+        if(s===1){playing=true;document.getElementById('play-icon').textContent='⏸';}
+        else if(s===0||s===2){playing=false;document.getElementById('play-icon').textContent='▶';}
+      },
+      onError(){if(fb)fb.style.display='flex';}
+    }
+  });
 }
 
 function setDurFromInput(val){
@@ -270,12 +307,18 @@ function setDurFromInput(val){
   renderTL();
 }
 function togglePlay(){
-  // Without JS API we toggle our internal timer; the iframe has its own controls
-  playing=!playing;
-  document.getElementById('play-icon').textContent=playing?'⏸':'▶';
+  if(player&&player.getPlayerState){
+    const s=player.getPlayerState();
+    if(s===1){player.pauseVideo();}else{player.playVideo();}
+    // playing flag is updated by onStateChange
+  } else {
+    playing=!playing;
+    document.getElementById('play-icon').textContent=playing?'⏸':'▶';
+  }
 }
 function skipTime(s){
   curMs=Math.max(0,Math.min(dur,curMs+s*1000));
+  if(player&&player.seekTo)player.seekTo(curMs/1000,true);
 }
 
 // ═══════════════ RAF + PERFORMANCE ════════════════
@@ -340,7 +383,13 @@ function startRaf(){
   (function loop(now){
     const dt=now-last;last=now;
 
-    if(playing&&(!player||player._iframe)){
+    // Sync curMs from real YT player; fall back to wall-clock only if no player
+    if(player&&player.getCurrentTime){
+      try{
+        const ct=player.getCurrentTime()*1000;
+        if(isFinite(ct))curMs=ct;
+      }catch(e){}
+    } else if(playing){
       curMs+=dt;
       if(curMs>=dur){curMs=dur;playing=false;document.getElementById('play-icon').textContent='▶';}
     }
@@ -756,7 +805,11 @@ function getRulerMs(e){
 function seekTo(ms){
   curMs=Math.max(0,Math.min(dur,ms));
   _justSeeked=true;
-  if(player&&player.seekTo)player.seekTo(curMs/1000,true);
+  if(player&&player.seekTo){
+    player.seekTo(curMs/1000,true);
+    // Resume playing state visually if was playing
+    if(playing&&player.playVideo)player.playVideo();
+  }
 }
 function rulerDown(e){
   e.preventDefault();
