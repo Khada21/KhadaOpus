@@ -272,14 +272,12 @@ function _createYTPlayer(v){
     videoId:v,
     playerVars:{
       autoplay:0,
-      controls:0,          // hide YouTube controls — we use our own
+      controls:1,          // must be 1 — YouTube blocks video render if controls=0
       modestbranding:1,
       rel:0,
       cc_load_policy:0,
       iv_load_policy:3,
-      disablekb:1,         // disable YouTube keyboard shortcuts (we handle keys)
-      fs:0,                // hide fullscreen button (no controls anyway)
-      showinfo:0,
+      disablekb:0,
       playsinline:1,
     },
     events:{
@@ -381,82 +379,137 @@ const posCSS_map={
 };
 
 // ═══════════════ WAVEFORM ════════════════
-// Generates a pseudo-random but consistent waveform from the video ID.
-// Not real audio data — but gives a useful visual reference for timing.
-function _drawFakeWaveform(){
-  // Timeline audio track
-  const audioRow=document.getElementById('audio-track');
-  if(!audioRow)return;
-  // Remove old canvas if any
-  let tlCanvas=document.getElementById('tl-wave-canvas');
-  if(tlCanvas)tlCanvas.remove();
-  const lbl=audioRow.querySelector('.audio-empty-lbl');
-  if(lbl)lbl.style.display='none';
-  tlCanvas=document.createElement('canvas');
-  tlCanvas.id='tl-wave-canvas';
-  audioRow.appendChild(tlCanvas);
-  _renderTLWave(tlCanvas);
+// Fetches real audio waveform data using Web Audio API.
+// Tries to decode audio from a CORS-enabled proxy; falls back to seeded fake.
 
-  // Karaoke editor waveform
-  const waveEmpty=document.getElementById('ke-wave-empty');
-  if(waveEmpty)waveEmpty.style.display='none';
+let _waveformPeaks = null; // Float32Array of normalised peak values (0..1)
+let _waveformVideoId = null;
+
+function _drawFakeWaveform(){
+  const audioRow = document.getElementById('audio-track');
+  if(!audioRow) return;
+  let tlCanvas = document.getElementById('tl-wave-canvas');
+  if(tlCanvas) tlCanvas.remove();
+  const lbl = audioRow.querySelector('.audio-empty-lbl');
+  if(lbl) lbl.style.display = 'none';
+  tlCanvas = document.createElement('canvas');
+  tlCanvas.id = 'tl-wave-canvas';
+  audioRow.appendChild(tlCanvas);
+
+  const vid = player && player.getVideoData ? player.getVideoData().video_id : null;
+  if(vid && vid !== _waveformVideoId){
+    _waveformVideoId = vid;
+    _waveformPeaks = null;
+    _fetchWaveform(vid).then(peaks => {
+      _waveformPeaks = peaks;
+      _renderTLWave(document.getElementById('tl-wave-canvas'));
+      if(karaEditId) reDrawKaraWave();
+    });
+  } else {
+    _renderTLWave(tlCanvas);
+  }
+
+  const waveEmpty = document.getElementById('ke-wave-empty');
+  if(waveEmpty) waveEmpty.style.display = 'none';
+}
+
+async function _fetchWaveform(videoId){
+  // Try fetching via a public CORS-enabled audio proxy and decode with Web Audio API
+  // Multiple fallback proxy URLs
+  const proxies = [
+    `https://pipedapi.kavin.rocks/streams/${videoId}`,
+    `https://api.piped.projectsegfau.lt/streams/${videoId}`,
+  ];
+  for(const url of proxies){
+    try{
+      const res = await fetch(url, {headers:{Accept:'application/json'}});
+      if(!res.ok) continue;
+      const data = await res.json();
+      // Find the lowest-quality audio stream to minimise download
+      const streams = (data.audioStreams||[]).sort((a,b)=>(a.bitrate||0)-(b.bitrate||0));
+      const stream = streams[0];
+      if(!stream||!stream.url) continue;
+      // Fetch audio bytes (may fail CORS depending on host)
+      const audioRes = await fetch(stream.url);
+      if(!audioRes.ok) continue;
+      const buf = await audioRes.arrayBuffer();
+      const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      const decoded = await audioCtx.decodeAudioData(buf);
+      audioCtx.close();
+      return _extractPeaks(decoded);
+    } catch(e){ /* try next proxy */ }
+  }
+  // All proxies failed — return seeded fake peaks
+  return _seedPeaks(videoId, Math.ceil((dur||180000)/50));
+}
+
+function _extractPeaks(audioBuffer){
+  // Downsample to one peak per ~50ms
+  const sampleRate = audioBuffer.sampleRate;
+  const ch = audioBuffer.getChannelData(0);
+  const samplesPerPeak = Math.floor(sampleRate * 0.05); // 50ms
+  const nPeaks = Math.ceil(ch.length / samplesPerPeak);
+  const peaks = new Float32Array(nPeaks);
+  for(let i=0; i<nPeaks; i++){
+    let max = 0;
+    const s = i*samplesPerPeak, e = Math.min(s+samplesPerPeak, ch.length);
+    for(let j=s; j<e; j++) max = Math.max(max, Math.abs(ch[j]));
+    peaks[i] = max;
+  }
+  // Normalise
+  const peak = Math.max(...peaks, 0.001);
+  return peaks.map(v => v/peak);
+}
+
+function _seedPeaks(seed, n){
+  let r = 0;
+  for(let i=0;i<seed.length;i++) r = (r*31+seed.charCodeAt(i))&0xfffffff;
+  function rand(){ r=(r*1664525+1013904223)&0xfffffff; return r/0xfffffff; }
+  const peaks = new Float32Array(n);
+  let prev = 0.4;
+  for(let i=0;i<n;i++){
+    prev = Math.max(0.05, Math.min(1, prev+(rand()-0.5)*0.35));
+    peaks[i] = prev;
+  }
+  return peaks;
 }
 
 function _renderTLWave(canvas){
-  if(!canvas||!dur)return;
-  const row=canvas.parentElement;
-  const W=Math.max(row.scrollWidth||1, Math.round(dur/1000*pxS));
-  const H=row.clientHeight||64;
-  canvas.width=W; canvas.height=H;
-  const ctx=canvas.getContext('2d');
+  if(!canvas || !dur) return;
+  const row = canvas.parentElement;
+  if(!row) return;
+  const W = Math.max(row.scrollWidth||1, Math.round(dur/1000*pxS));
+  const H = row.clientHeight || 64;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,W,H);
 
-  // Seed from video ID for consistency
-  const seed=(player&&player.getVideoData)?player.getVideoData().video_id||'x':'x';
-  let r=0;
-  for(let i=0;i<seed.length;i++)r=(r*31+seed.charCodeAt(i))&0xfffffff;
-  function rand(){r=(r*1664525+1013904223)&0xfffffff;return r/0xfffffff;}
-
-  // Generate peaks: one per ~50ms of audio
-  const nPeaks=Math.ceil(dur/50);
-  const peaks=[];
-  let prev=0.4;
-  for(let i=0;i<nPeaks;i++){
-    prev=Math.max(0.05,Math.min(1,prev+(rand()-0.5)*0.35));
-    peaks.push(prev);
-  }
-
-  // Draw waveform
-  const mid=H/2;
-  ctx.strokeStyle='#30d158';
-  ctx.lineWidth=1;
+  const peaks = _waveformPeaks || _seedPeaks(_waveformVideoId||'x', Math.ceil((dur||180000)/50));
+  const mid = H/2;
   ctx.beginPath();
-  for(let x=0;x<W;x++){
-    const t=x/W;
-    const pi=Math.min(nPeaks-1,Math.floor(t*nPeaks));
-    const amp=peaks[pi]*mid*0.85;
-    if(x===0)ctx.moveTo(x,mid-amp);
-    else ctx.lineTo(x,mid-amp);
+  for(let x=0; x<W; x++){
+    const t = x/W;
+    const pi = Math.min(peaks.length-1, Math.floor(t*peaks.length));
+    const amp = peaks[pi]*mid*0.9;
+    if(x===0) ctx.moveTo(x, mid-amp); else ctx.lineTo(x, mid-amp);
   }
-  // Mirror bottom
-  for(let x=W-1;x>=0;x--){
-    const t=x/W;
-    const pi=Math.min(nPeaks-1,Math.floor(t*nPeaks));
-    const amp=peaks[pi]*mid*0.85;
-    ctx.lineTo(x,mid+amp);
+  for(let x=W-1; x>=0; x--){
+    const t = x/W;
+    const pi = Math.min(peaks.length-1, Math.floor(t*peaks.length));
+    const amp = peaks[pi]*mid*0.9;
+    ctx.lineTo(x, mid+amp);
   }
   ctx.closePath();
-  ctx.fillStyle='rgba(48,209,88,0.18)';
+  ctx.fillStyle = 'rgba(48,209,88,0.18)';
   ctx.fill();
-  ctx.strokeStyle='rgba(48,209,88,0.6)';
-  ctx.lineWidth=1;
+  ctx.strokeStyle = 'rgba(48,209,88,0.65)';
+  ctx.lineWidth = 1;
   ctx.stroke();
 }
 
-// Re-render TL waveform when zoom changes (canvas width depends on pxS)
 function _refreshWave(){
-  const c=document.getElementById('tl-wave-canvas');
-  if(c)_renderTLWave(c);
+  const c = document.getElementById('tl-wave-canvas');
+  if(c) _renderTLWave(c);
 }
 
 function startRaf(){
@@ -1542,34 +1595,34 @@ function reDrawKaraWave(){
     px+=w;
   });
 
-  // Waveform overlay (fake, seeded from video ID)
-  if(player&&player.getDuration&&player.getDuration()>0){
-    const seed=(player.getVideoData?player.getVideoData().video_id:null)||'x';
-    let rv=0;for(let i=0;i<seed.length;i++)rv=(rv*31+seed.charCodeAt(i))&0xfffffff;
-    function randv(){rv=(rv*1664525+1013904223)&0xfffffff;return rv/0xfffffff;}
+  // Waveform overlay — use real peaks if available, else seeded fake
+  {
     const sub2=subs.find(s=>s.id===karaEditId);
-    const subDurMs=sub2?(sub2.endMs-sub2.startMs):2000;
-    const nPeaks=Math.ceil(subDurMs/40);
-    const kPeaks=[];let kp=0.4;
-    // Offset seed by subtitle start so each sub looks different
-    const startOff=sub2?Math.floor(sub2.startMs/40):0;
-    for(let i=0;i<startOff+nPeaks;i++){kp=Math.max(0.05,Math.min(1,kp+(randv()-0.5)*0.35));if(i>=startOff)kPeaks.push(kp);}
+    const subStartMs=sub2?sub2.startMs:0;
+    const subEndMs=sub2?sub2.endMs:2000;
+    const subDurMs=Math.max(1,subEndMs-subStartMs);
+    const allPeaks=_waveformPeaks||_seedPeaks(_waveformVideoId||'x',Math.ceil((dur||180000)/50));
+    // Slice peaks to just the subtitle window
+    const peakPerMs=allPeaks.length/(dur||180000);
+    const pStart=Math.floor(subStartMs*peakPerMs);
+    const pEnd=Math.min(allPeaks.length,Math.ceil(subEndMs*peakPerMs));
+    const kPeaks=allPeaks.slice(pStart,pEnd);
     const mid2=H/2;
     ctx.save();
-    ctx.globalAlpha=0.35;
+    ctx.globalAlpha=0.4;
     ctx.beginPath();
     for(let x=0;x<W;x++){
       const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
-      const amp=kPeaks[pi]*mid2*0.8;
+      const amp=(kPeaks[pi]||0)*mid2*0.85;
       if(x===0)ctx.moveTo(x,mid2-amp); else ctx.lineTo(x,mid2-amp);
     }
     for(let x=W-1;x>=0;x--){
       const pi=Math.min(kPeaks.length-1,Math.floor(x/W*kPeaks.length));
-      const amp=kPeaks[pi]*mid2*0.8;
+      const amp=(kPeaks[pi]||0)*mid2*0.85;
       ctx.lineTo(x,mid2+amp);
     }
     ctx.closePath();
-    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fill();
     ctx.restore();
   }
 
