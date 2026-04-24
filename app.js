@@ -1996,7 +1996,7 @@ function closeKaraEditor(){
   renderBlocks();
 }
 
-// ── Draw syllable color bands (unified color, Aegisub-style) ──
+// ── Draw waveform + syllable color bands (Aegisub-style) ──
 function reDrawKaraWave(){
   const canvas=document.getElementById('ke-wave-canvas');
   const wrap=document.getElementById('ke-wave-wrap');
@@ -2009,52 +2009,117 @@ function reDrawKaraWave(){
   const sub=subs.find(s=>s.id===karaEditId);
   if(!sub||!sub.karaoke){ctx.fillStyle='#111114';ctx.fillRect(0,0,W,H);return;}
   const syls=sub.karaoke.syllables;
-  const totalMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
+  const totalDurMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
   const preColor=sub.karaoke.preColor||'#5046EC';
-
-  // Parse preColor to rgb for alpha blending
   function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return[r,g,b];}
-  const [pr,pg,pb]=hexToRgb(preColor);
+  const[pr,pg,pb]=hexToRgb(preColor);
 
-  // Draw syllable bands
-  let px=0;
+  // 1. Dark background
+  ctx.fillStyle='#0a0a0e';
+  ctx.fillRect(0,0,W,H);
+
+  // 2. Dim syllable tint bands (drawn before waveform so wave shows through)
+  let bx=0;
   syls.forEach((syl,i)=>{
-    const w=(syl.durMs/totalMs)*W;
-    const isSel=i===karaSelSyl;
-    // Sung (before cursor) = preColor tinted, unsung = neutral dark; selected = brighter
-    ctx.fillStyle=isSel
-      ?`rgba(${pr},${pg},${pb},0.85)`
-      :`rgba(${pr},${pg},${pb},0.28)`;
-    ctx.fillRect(Math.floor(px),0,Math.ceil(w),H);
-    // Selected border
-    if(isSel){
-      ctx.strokeStyle=`rgba(${pr},${pg},${pb},1)`;ctx.lineWidth=2;
-      ctx.strokeRect(Math.floor(px)+1,1,Math.ceil(w)-2,H-2);
-    }
-    // Syllable label
-    ctx.fillStyle=isSel?'rgba(255,255,255,0.98)':'rgba(255,255,255,0.55)';
-    ctx.font=`${isSel?'bold ':''}`+(H>60?'12':'10')+'px monospace';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    const label=syl.text.trim()||'·';
-    ctx.fillText(label.length>8?label.slice(0,7)+'…':label,Math.floor(px)+Math.ceil(w)/2,H/2);
-    px+=w;
+    const bw=(syl.durMs/totalDurMs)*W;
+    ctx.fillStyle=i===karaSelSyl
+      ?`rgba(${pr},${pg},${pb},0.30)`
+      :`rgba(${pr},${pg},${pb},0.10)`;
+    ctx.fillRect(Math.floor(bx),0,Math.ceil(bw),H);
+    bx+=bw;
   });
 
-  // Draw boundary lines
-  px=0;
+  // 3. Real audio waveform scoped to the subtitle's time window
+  const mid=H/2;
+  if(_waveformSamples&&_waveformSamples.length>0&&dur>0){
+    const subStartMs=sub.startMs;
+    const subEndMs=sub.startMs+totalDurMs;
+    const totalSamples=_waveformSamples.length;
+    const startFrac=subStartMs/dur;
+    const endFrac=Math.min(subEndMs/dur,1);
+    const wavePeaks=new Float32Array(W);
+    for(let px=0;px<W;px++){
+      const f0=startFrac+(endFrac-startFrac)*(px/W);
+      const f1=startFrac+(endFrac-startFrac)*((px+1)/W);
+      const s=Math.floor(f0*totalSamples);
+      const e=Math.ceil(f1*totalSamples);
+      let rms=0,n=0;
+      for(let i=s;i<e&&i<totalSamples;i++){rms+=_waveformSamples[i]*_waveformSamples[i];n++;}
+      wavePeaks[px]=n>0?Math.sqrt(rms/n):0;
+    }
+    let maxP=0;for(let i=0;i<W;i++)if(wavePeaks[i]>maxP)maxP=wavePeaks[i];
+    if(maxP>0)for(let i=0;i<W;i++)wavePeaks[i]/=maxP;
+    // Mirror waveform bars
+    for(let px=0;px<W;px++){
+      const amp=wavePeaks[px]*mid*0.90;
+      ctx.fillStyle=`rgba(${pr},${pg},${pb},0.65)`;
+      ctx.fillRect(px,mid-amp,1,amp*2||1);
+    }
+    // Bright edge lines
+    ctx.strokeStyle=`rgba(${pr},${pg},${pb},0.95)`;
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let px=0;px<W;px++){
+      const y=mid-wavePeaks[px]*mid*0.90;
+      px===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for(let px=0;px<W;px++){
+      const y=mid+wavePeaks[px]*mid*0.90;
+      px===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
+    }
+    ctx.stroke();
+  } else {
+    // No audio — dashed center placeholder
+    ctx.strokeStyle=`rgba(${pr},${pg},${pb},0.3)`;
+    ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(W,mid);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 4. Selected syllable highlight on top of waveform
+  bx=0;
   syls.forEach((syl,i)=>{
-    px+=(syl.durMs/totalMs)*W;
+    const bw=(syl.durMs/totalDurMs)*W;
+    if(i===karaSelSyl){
+      ctx.fillStyle=`rgba(${pr},${pg},${pb},0.35)`;
+      ctx.fillRect(Math.floor(bx),0,Math.ceil(bw),H);
+      ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=2;
+      ctx.strokeRect(Math.floor(bx)+1,1,Math.ceil(bw)-2,H-2);
+    }
+    bx+=bw;
+  });
+
+  // 5. Syllable labels bottom-anchored (shadow for readability over waveform)
+  bx=0;
+  syls.forEach((syl,i)=>{
+    const bw=(syl.durMs/totalDurMs)*W;
+    const isSel=i===karaSelSyl;
+    const label=syl.text.trimEnd()||'·';
+    ctx.font=(isSel?'bold ':'')+(H>60?'12':'10')+'px monospace';
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=5;
+    ctx.fillStyle=isSel?'#ffffff':'rgba(255,255,255,0.7)';
+    ctx.fillText(label.length>10?label.slice(0,9)+'…':label,Math.floor(bx)+Math.ceil(bw)/2,H-4);
+    ctx.shadowBlur=0;
+    bx+=bw;
+  });
+
+  // 6. Boundary dividers & drag arrows
+  bx=0;
+  syls.forEach((syl,i)=>{
+    bx+=(syl.durMs/totalDurMs)*W;
     if(i<syls.length-1){
-      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;
-      ctx.beginPath();ctx.moveTo(Math.round(px),0);ctx.lineTo(Math.round(px),H);ctx.stroke();
-      const mid=H/2;
-      ctx.fillStyle='rgba(255,255,255,0.75)';
-      ctx.beginPath();ctx.moveTo(Math.round(px)-6,mid);ctx.lineTo(Math.round(px)-2,mid-4);ctx.lineTo(Math.round(px)-2,mid+4);ctx.closePath();ctx.fill();
-      ctx.beginPath();ctx.moveTo(Math.round(px)+6,mid);ctx.lineTo(Math.round(px)+2,mid-4);ctx.lineTo(Math.round(px)+2,mid+4);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.55)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(Math.round(bx),0);ctx.lineTo(Math.round(bx),H);ctx.stroke();
+      const m=H/2;
+      ctx.fillStyle='rgba(255,255,255,0.8)';
+      ctx.beginPath();ctx.moveTo(Math.round(bx)-6,m);ctx.lineTo(Math.round(bx)-2,m-4);ctx.lineTo(Math.round(bx)-2,m+4);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(Math.round(bx)+6,m);ctx.lineTo(Math.round(bx)+2,m-4);ctx.lineTo(Math.round(bx)+2,m+4);ctx.closePath();ctx.fill();
     }
   });
 }
-
 // ── Build syllable word strip (draggable boundaries) ──
 function buildSylStrip(){
   const row=document.getElementById('ke-syl-row');if(!row)return;
@@ -2078,8 +2143,8 @@ function buildSylStrip(){
     seg.style.outlineOffset='-2px';
     seg.style.color='#fff';
     seg.dataset.idx=i;
-    seg.textContent=syl.text||'·';
-    seg.title=syl.text+' · '+syl.durMs+'ms';
+    seg.textContent=syl.text.trimEnd()||'·';  // show clean label; trailing space is timing-only
+    seg.title=syl.text.trimEnd()+' · '+syl.durMs+'ms';
     seg.addEventListener('mousedown',e=>{
       e.preventDefault();e.stopPropagation();
       karaSelSyl=i;buildSylStrip();reDrawKaraWave();updKaraSelEdit();

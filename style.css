@@ -417,7 +417,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 /* Syllable word row below waveform – like Aegisub bottom strip */
 .ke-syl-row{height:34px;flex-shrink:0;background:#111114;border-bottom:1px solid var(--border);position:relative;z-index:5;user-select:none}
-.ke-syl-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;overflow:hidden;cursor:pointer;user-select:none;box-sizing:border-box;border-right:1px solid rgba(0,0,0,0.5)}
+.ke-syl-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;overflow:hidden;cursor:pointer;user-select:none;box-sizing:border-box;}
 .ke-syl-seg.sel{outline:2px solid #fff;outline-offset:-2px;z-index:2}
 /* Edge handles sit ON TOP of the row, positioned at each syllable boundary */
 .ke-syl-edge{position:absolute;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:20;transform:translateX(-50%);background:transparent;transition:background .1s}
