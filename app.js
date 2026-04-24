@@ -885,9 +885,13 @@ function deleteSel(){
 // ═══════════════ RULER SCRUB ════════════════
 let scrubbing=false;
 function getRulerMs(e){
-  const r=document.getElementById('tl-ruler').getBoundingClientRect();
+  // e.clientX - r.left = position relative to the visible ruler left edge (viewport coords)
+  // sc.scrollLeft = how far the scroll container is scrolled
+  // Together they give the absolute pixel position within the full canvas
   const sc=document.getElementById('tl-scroll');
-  const x=Math.max(0,e.clientX-r.left+sc.scrollLeft);
+  const scRect=sc.getBoundingClientRect();
+  // Position relative to the scroll container's left edge, plus scroll offset
+  const x=Math.max(0, e.clientX - scRect.left + sc.scrollLeft);
   return Math.max(0,Math.min(dur,x2ms(x)));
 }
 function seekTo(ms){
