@@ -1,35 +1,22 @@
 // ═══════════════ CHROMA EFFECT ════════════════
-// Cycles text/outline color through the full HSL hue wheel during a subtitle's duration.
-// Data shape: sub.chroma = { speed:1000, saturation:85, lightness:55, startHue:0, target:'text' }
-//   speed      = ms per full 360° hue cycle
-//   saturation = 0–100 %
-//   lightness  = 0–100 %
-//   startHue   = 0–360 starting hue
-//   target     = 'text' | 'outline' | 'both'
-// On YTT export: expanded into 10fps frame segments (same technique as styleKfs / Fade).
-// Skipped for Move subs and Karaoke subs — same restriction as styleKfs.
+// Chromatic aberration: three simultaneous R/G/B copies of the text at
+// horizontally-offset positions, creating a prism/glitch split.
+// Appears as a flash at the start and end of the subtitle.
+//
+// Data shape: sub.chroma = { flashMs: 100, offset: 4 }
+//   flashMs = duration of RGB flash at start and end (ms, 0 = instant snap)
+//   offset  = horizontal split distance in ah% units (0–20)
+//
+// YTT export: emits three simultaneous <p> elements during flash periods,
+// each at a slightly different ah position with R/G/B colors at 50% opacity.
+// Skipped for Move subs — position offsets are relative to the grid position.
+
+// Position map (matches move.js posToAhAv — kept in sync)
+const _chrPosToAhAv = {7:[0,0],8:[50,0],9:[100,0],4:[0,50],5:[50,50],6:[100,50],1:[0,100],2:[50,100],3:[100,100]};
 
 let chromaEditId = null;
-let _chromaRaf = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function _hslToHex(h, s, l) {
-  h = ((h % 360) + 360) % 360;
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  function f(n) {
-    const k = (n + h / 30) % 12;
-    const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(v * 255).toString(16).padStart(2, '0');
-  }
-  return '#' + f(0) + f(8) + f(4);
-}
-
-function _chromaColorAt(chroma, msRel) {
-  const hue = chroma.startHue + (msRel / Math.max(1, chroma.speed)) * 360;
-  return _hslToHex(hue, chroma.saturation, chroma.lightness);
-}
 
 function hasChroma(sub) { return !!(sub && sub.chroma); }
 
@@ -37,7 +24,7 @@ function hasChroma(sub) { return !!(sub && sub.chroma); }
 
 function applyChromaToSub(sub) {
   if (hasChroma(sub)) return;
-  sub.chroma = { speed: 1000, saturation: 85, lightness: 55, startHue: 0, target: 'text' };
+  sub.chroma = { flashMs: 100, offset: 4 };
   renderBlocks(); renderSL(); chkYtt();
 }
 
@@ -61,40 +48,35 @@ function openChromaEditor(id) {
   const revEd = document.getElementById('reverse-editor');
   const chrEd = document.getElementById('chroma-editor');
 
-  if (karaEditId) { if (karaEd && karaEd.offsetHeight > 0) panelH = karaEd.offsetHeight; closeKaraEditor(); }
-  else if (moveEditId) { if (moveEd && moveEd.offsetHeight > 0) panelH = moveEd.offsetHeight; closeMoveEditor(); }
-  else if (mirrorEditId) { if (mirEd && mirEd.offsetHeight > 0) panelH = mirEd.offsetHeight; closeMirrorEditor(); }
-  else if (fadeEditId) { if (fadEd && fadEd.offsetHeight > 0) panelH = fadEd.offsetHeight; closeFadeEditor(); }
-  else if (reverseEditId) { if (revEd && revEd.offsetHeight > 0) panelH = revEd.offsetHeight; closeReverseEditor(); }
+  if (karaEditId)       { if (karaEd && karaEd.offsetHeight > 0) panelH = karaEd.offsetHeight; closeKaraEditor(); }
+  else if (moveEditId)  { if (moveEd && moveEd.offsetHeight > 0) panelH = moveEd.offsetHeight; closeMoveEditor(); }
+  else if (mirrorEditId){ if (mirEd && mirEd.offsetHeight > 0) panelH = mirEd.offsetHeight; closeMirrorEditor(); }
+  else if (fadeEditId)  { if (fadEd && fadEd.offsetHeight > 0) panelH = fadEd.offsetHeight; closeFadeEditor(); }
+  else if (reverseEditId){ if (revEd && revEd.offsetHeight > 0) panelH = revEd.offsetHeight; closeReverseEditor(); }
   else if (chromaEditId && chromaEditId !== id) { if (chrEd && chrEd.offsetHeight > 0) panelH = chrEd.offsetHeight; closeChromaEditor(); }
+  else if (typeof fadeWorksEditId !== 'undefined' && fadeWorksEditId) { const fwEd2 = document.getElementById('fadeworks-editor'); if (fwEd2 && fwEd2.offsetHeight > 0) panelH = fwEd2.offsetHeight; closeFadeWorksEditor(); }
+  else if (typeof shakeEditId !== 'undefined' && shakeEditId) { const skEd2 = document.getElementById('shake-editor'); if (skEd2 && skEd2.offsetHeight > 0) panelH = skEd2.offsetHeight; closeShakeEditor(); }
   else { if (insp && insp.offsetHeight > 0) panelH = insp.offsetHeight; }
 
   chromaEditId = id;
   insp.style.display = 'none';
   karaEd && (karaEd.style.display = 'none');
   moveEd && (moveEd.style.display = 'none');
-  mirEd && (mirEd.style.display = 'none');
-  fadEd && (fadEd.style.display = 'none');
-  revEd && (revEd.style.display = 'none');
+  mirEd  && (mirEd.style.display  = 'none');
+  fadEd  && (fadEd.style.display  = 'none');
+  revEd  && (revEd.style.display  = 'none');
   chrEd.style.display = 'flex';
-  chrEd.style.flex = 'none';
-  chrEd.style.height = Math.max(260, panelH) + 'px';
+  chrEd.style.flex    = 'none';
+  chrEd.style.height  = Math.max(260, panelH) + 'px';
 
   const sub = subs.find(s => s.id === id);
   if (sub && sub.chroma) {
     const c = sub.chroma;
-    document.getElementById('chr-speed').value = c.speed;
-    document.getElementById('chr-speed-v').textContent = c.speed + 'ms';
-    document.getElementById('chr-sat').value = c.saturation;
-    document.getElementById('chr-sat-v').textContent = c.saturation + '%';
-    document.getElementById('chr-light').value = c.lightness;
-    document.getElementById('chr-light-v').textContent = c.lightness + '%';
-    document.getElementById('chr-hue').value = c.startHue;
-    document.getElementById('chr-hue-v').textContent = c.startHue + '°';
-    document.querySelectorAll('.chroma-target-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.target === c.target));
+    document.getElementById('chr-flash').value = c.flashMs ?? 100;
+    document.getElementById('chr-flash-v').textContent = (c.flashMs ?? 100) + 'ms';
+    document.getElementById('chr-offset').value = c.offset ?? 4;
+    document.getElementById('chr-offset-v').textContent = c.offset ?? 4;
   }
-  _startChromaPreview(id);
   renderBlocks(); renderSL();
 }
 
@@ -103,7 +85,6 @@ function closeChromaEditor() {
   const insp = document.getElementById('inspector');
   const h = chrEd ? chrEd.offsetHeight : 0;
   chromaEditId = null;
-  _stopChromaPreview();
   if (chrEd) chrEd.style.display = 'none';
   insp.style.display = 'flex';
   insp.style.flex = 'none';
@@ -113,54 +94,13 @@ function closeChromaEditor() {
 
 // ── Setters ───────────────────────────────────────────────────────────────────
 
-function chromaSetSpeed(v) {
+function chromaSetFlash(v) {
   const sub = subs.find(s => s.id === chromaEditId); if (!sub || !sub.chroma) return;
-  sub.chroma.speed = Math.max(100, +v); chkYtt();
+  sub.chroma.flashMs = Math.max(0, +v); chkYtt();
 }
-function chromaSetSat(v) {
+function chromaSetOffset(v) {
   const sub = subs.find(s => s.id === chromaEditId); if (!sub || !sub.chroma) return;
-  sub.chroma.saturation = +v; chkYtt();
-}
-function chromaSetLight(v) {
-  const sub = subs.find(s => s.id === chromaEditId); if (!sub || !sub.chroma) return;
-  sub.chroma.lightness = +v; chkYtt();
-}
-function chromaSetHue(v) {
-  const sub = subs.find(s => s.id === chromaEditId); if (!sub || !sub.chroma) return;
-  sub.chroma.startHue = +v; chkYtt();
-}
-function chromaSetTarget(target) {
-  const sub = subs.find(s => s.id === chromaEditId); if (!sub || !sub.chroma) return;
-  sub.chroma.target = target;
-  document.querySelectorAll('.chroma-target-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.target === target));
-  chkYtt();
-}
-
-// ── Animated preview swatch ───────────────────────────────────────────────────
-
-function _startChromaPreview(id) {
-  _stopChromaPreview();
-  const el = document.getElementById('chr-preview-swatch');
-  if (!el) return;
-  let t = 0;
-  const FPS = 30;
-  const step = 1000 / FPS;
-  function tick() {
-    const sub = subs.find(s => s.id === id);
-    if (!sub || !sub.chroma || !chromaEditId) { _stopChromaPreview(); return; }
-    const c = sub.chroma;
-    const col = _chromaColorAt(c, t);
-    const col2 = _chromaColorAt(c, t + c.speed * 0.5);
-    el.style.background = `linear-gradient(90deg, ${col}, ${col2}, ${col})`;
-    t = (t + step) % Math.max(1, c.speed);
-    _chromaRaf = requestAnimationFrame(tick);
-  }
-  _chromaRaf = requestAnimationFrame(tick);
-}
-
-function _stopChromaPreview() {
-  if (_chromaRaf) { cancelAnimationFrame(_chromaRaf); _chromaRaf = null; }
+  sub.chroma.offset = Math.max(0, Math.min(20, +v)); chkYtt();
 }
 
 // ── Drag-and-drop ─────────────────────────────────────────────────────────────
@@ -243,10 +183,10 @@ openReverseEditor = _patchCloseChroma(openReverseEditor);
 openMoveEditor    = _patchCloseChroma(openMoveEditor);
 openKaraEditor    = _patchCloseChroma(openKaraEditor);
 
-// ── buildYTT monkey-patch: outermost wrapper ──────────────────────────────────
-// Chroma wraps OUTSIDE stylekf.js, so the color-cycled frames also benefit from
-// any styleKfs that were already baked in by the inner stylekf wrapper.
-// Skipped for Move and Karaoke subs (same restriction as styleKfs).
+// ── buildYTT monkey-patch ─────────────────────────────────────────────────────
+// For each chroma sub, emits three simultaneous RGB-split copies during the
+// flash window at the start and end, plus the normal sub for the main body.
+// The _chrAhOffset property is read by move.js to shift the wp position.
 
 const _origBuildYTT_chr = buildYTT;
 buildYTT = function(sorted) {
@@ -254,25 +194,41 @@ buildYTT = function(sorted) {
   sorted.forEach(s => {
     if (!hasChroma(s) || hasMove(s) || hasKaraoke(s)) { expanded.push(s); return; }
     const c = s.chroma;
-    const FPS = 10;
-    const frameDurMs = 1000 / FPS;
     const totalDur = Math.max(1, s.endMs - s.startMs);
-    let t = 0;
-    while (t < totalDur) {
-      const segEnd = Math.min(t + frameDurMs, totalDur);
-      const color = _chromaColorAt(c, t);
-      const styleOverride = {};
-      if (c.target === 'text' || c.target === 'both') styleOverride.textColor = color;
-      if (c.target === 'outline' || c.target === 'both') styleOverride.outlineColor = color;
-      expanded.push({
-        ...s,
-        startMs: s.startMs + Math.round(t),
-        endMs: s.startMs + Math.round(segEnd),
-        style: { ...s.style, ...styleOverride },
-        chroma: undefined,
-        styleKfs: undefined,
-      });
-      t += frameDurMs;
+    const flashMs = Math.max(0, Math.min(c.flashMs ?? 100, Math.floor(totalDur / 2)));
+    const offset = Math.max(0, c.offset ?? 4);
+    const [bah] = _chrPosToAhAv[s.style.position || 2] || [50, 100];
+
+    function pushFlash(startMs, endMs) {
+      const d = Math.max(1, endMs - startMs);
+      // Red — offset right
+      expanded.push({ ...s, startMs, endMs: startMs + d,
+        style: { ...s.style, textColor: '#FF0000', textAlpha: 50 },
+        _chrAhOffset: offset, chroma: undefined, styleKfs: undefined, fadeworks: undefined, shake: undefined, mirror: undefined });
+      // Green — center
+      expanded.push({ ...s, startMs, endMs: startMs + d,
+        style: { ...s.style, textColor: '#00FF00', textAlpha: 50 },
+        _chrAhOffset: 0, chroma: undefined, styleKfs: undefined, fadeworks: undefined, shake: undefined, mirror: undefined });
+      // Blue — offset left
+      expanded.push({ ...s, startMs, endMs: startMs + d,
+        style: { ...s.style, textColor: '#0000FF', textAlpha: 50 },
+        _chrAhOffset: -offset, chroma: undefined, styleKfs: undefined, fadeworks: undefined, shake: undefined, mirror: undefined });
+    }
+
+    if (flashMs > 0) {
+      // Intro flash
+      pushFlash(s.startMs, s.startMs + flashMs);
+      // Main body
+      const mainDur = totalDur - flashMs * 2;
+      if (mainDur > 0) {
+        expanded.push({ ...s, startMs: s.startMs + flashMs, endMs: s.endMs - flashMs,
+          chroma: undefined, styleKfs: undefined });
+      }
+      // Outro flash
+      pushFlash(s.endMs - flashMs, s.endMs);
+    } else {
+      // No flash — whole subtitle is the RGB split
+      pushFlash(s.startMs, s.endMs);
     }
   });
   return _origBuildYTT_chr.call(this, expanded);

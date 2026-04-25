@@ -12,6 +12,8 @@ function _wrapYTTWithSig(yttXml){
       _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined,
       styleKfs:s.styleKfs?{frames:s.styleKfs.frames.map(f=>({...f}))}:undefined,
       chroma:s.chroma?{...s.chroma}:undefined,
+      fadeworks:s.fadeworks?{...s.fadeworks}:undefined,
+      shake:s.shake?{...s.shake}:undefined,
     })),
     tracks:[...tracks],
     name:document.getElementById('topbar-title')?.textContent||'',

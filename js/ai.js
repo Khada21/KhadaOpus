@@ -21,6 +21,8 @@ function _openAiPanel() {
   if (typeof fadeEditId !== 'undefined' && fadeEditId) closeFadeEditor();
   if (typeof reverseEditId !== 'undefined' && reverseEditId) closeReverseEditor();
   if (typeof chromaEditId !== 'undefined' && chromaEditId) closeChromaEditor();
+  if (typeof fadeWorksEditId !== 'undefined' && fadeWorksEditId) closeFadeWorksEditor();
+  if (typeof shakeEditId !== 'undefined' && shakeEditId) closeShakeEditor();
 
   document.getElementById('inspector').style.display = 'none';
   document.getElementById('resize-insp-sl').style.display = 'none';

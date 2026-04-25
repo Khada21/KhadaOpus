@@ -620,6 +620,12 @@ buildYTT=function(sorted){
         getPenId(fadedKey);
       });
     }
+    // Pre-register FadeWorks pens — 5 opacity levels: 0%, 17%, 50%, 83%, 100%
+    if(s.fadeworks&&!hasMove(s)&&!hasKaraoke(s)){
+      [0,17,50,83,100].forEach(pct=>{
+        getPenId(JSON.stringify({...s.style,_fc:s.style.textColor,_fo:pct}));
+      });
+    }
   });
 
   // Collect all unique wp positions
@@ -635,8 +641,9 @@ buildYTT=function(sorted){
   sorted.forEach(s=>{
     if(!hasMove(s)){
       const pos=s.style.position||2;
-      const[ah,av]=posToAhAv[pos]||[50,100];
-      const ap=posToAp[pos]??7;
+      const[ah_base,av]=posToAhAv[pos]||[50,100];
+      const ah=s._chrAhOffset?Math.max(0,Math.min(100,ah_base+(s._chrAhOffset||0))):ah_base;
+      const ap=s._chrAhOffset?4:(posToAp[pos]??7);
       getWpId(ah,av,ap);
       if(hasMirror(s)){
         const m=s.mirror,axis=m.axis||'x',ox=m.offsetX||0,oy=m.offsetY||0;
@@ -844,10 +851,114 @@ buildYTT=function(sorted){
     }
 
     const pos=s.style.position||2;
-    const[nah,nav]=posToAhAv[pos]||[50,100];
-    const apVal=posToAp[pos]??7;
+    const[nah_base,nav]=posToAhAv[pos]||[50,100];
+    const nah=s._chrAhOffset?Math.max(0,Math.min(100,nah_base+(s._chrAhOffset||0))):nah_base;
+    const apVal=s._chrAhOffset?4:(posToAp[pos]??7);
     const wpId=getWpId(nah,nav,apVal);
     const subDur=Math.max(1,s.endMs-s.startMs);
+
+    // ── FadeWorks: character-wipe reveal/hide ──────────────────────────────────
+    if(s.fadeworks&&!hasKaraoke(s)){
+      const fw=s.fadeworks;
+      const chars=[...displayText];
+      const nc=chars.length;
+      if(nc===0){lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"><s p="${mainPenId}"></s></p>`);return;}
+      const FW_TRAIL=3,FW_FRAME=67;
+      const FW_OPTS=[0,17,50,83,100];
+      const fwPens=FW_OPTS.map(pct=>{const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:pct});return penIndex.get(k)??0;});
+      function fwEase(t,accel,decel){
+        const a=1+(accel||0)*2,d=1+(decel||0)*2;
+        if((accel||0)>0.01&&(decel||0)>0.01)return t<0.5?Math.pow(2*t,a)/2:1-Math.pow(2*(1-t),d)/2;
+        if((accel||0)>0.01)return Math.pow(t,a);
+        if((decel||0)>0.01)return 1-Math.pow(1-t,d);
+        return t;
+      }
+      function fwReveal(ci){
+        const parts=[];
+        const fe=Math.max(0,ci-FW_TRAIL);
+        if(fe>0)parts.push(`<s p="${fwPens[4]}">${escX2(chars.slice(0,fe).join(''))}</s>`);
+        for(let i=0;i<FW_TRAIL;i++){const idx=ci-FW_TRAIL+i;if(idx>=0&&idx<nc)parts.push(`<s p="${fwPens[i+1]}">${escX2(chars[idx])}</s>`);}
+        if(ci<nc)parts.push(`<s p="${fwPens[0]}">${escX2(chars.slice(ci).join(''))}</s>`);
+        return parts;
+      }
+      function fwHide(ci){
+        const parts=[];
+        if(ci>0)parts.push(`<s p="${fwPens[0]}">${escX2(chars.slice(0,ci).join(''))}</s>`);
+        for(let i=0;i<FW_TRAIL;i++){const idx=ci+i;if(idx>=0&&idx<nc)parts.push(`<s p="${fwPens[i+1]}">${escX2(chars[idx])}</s>`);}
+        const fs=Math.min(nc,ci+FW_TRAIL);if(fs<nc)parts.push(`<s p="${fwPens[4]}">${escX2(chars.slice(fs).join(''))}</s>`);
+        return parts;
+      }
+      const fwIn=Math.max(0,fw.inMs||0),fwOut=Math.max(0,fw.outMs||0);
+      const fwHoldMs=Math.max(0,subDur-fwIn-fwOut);
+      // Reveal phase
+      if(fwIn>0){
+        let t=s.startMs;const inEnd=s.startMs+fwIn;
+        while(t<inEnd){
+          const fEnd=Math.min(t+FW_FRAME,inEnd);
+          const ci=Math.max(0,Math.min(nc,Math.floor(fwEase(Math.min(1,(t-s.startMs)/fwIn),fw.accel||0,fw.decel||0)*nc)));
+          const parts=fwReveal(ci);
+          if(parts.length)lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${wpId}" ws="0">${parts.join('')}</p>`);
+          t=fEnd;
+        }
+      }
+      // Hold phase
+      const fwHoldStart=s.startMs+fwIn;
+      if(fwHoldMs>0)lines.push(`<p t="${fwHoldStart}" d="${fwHoldMs}" wp="${wpId}" ws="0"><s p="${fwPens[4]}">${escX2(displayText)}</s></p>`);
+      // Hide phase
+      const fwOutStart=fwHoldStart+fwHoldMs;
+      if(fwOut>0){
+        let t=fwOutStart;const outEnd=s.endMs;
+        while(t<outEnd){
+          const fEnd=Math.min(t+FW_FRAME,outEnd);
+          const ci=Math.max(0,Math.min(nc,Math.floor(fwEase(Math.min(1,(t-fwOutStart)/fwOut),fw.accel||0,fw.decel||0)*nc)));
+          const parts=fwHide(ci);
+          if(parts.length)lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${wpId}" ws="0">${parts.join('')}</p>`);
+          t=fEnd;
+        }
+      }
+      return;
+    }
+
+    // ── Shake: random position jitter ─────────────────────────────────────────
+    if(s.shake&&!hasKaraoke(s)){
+      const sk=s.shake;
+      const radius=Math.max(1,Math.min(20,sk.radius||5));
+      const intensity=Math.max(1,Math.min(10,sk.intensity||5));
+      // Frame duration: intensity 1→200ms, intensity 10→50ms
+      const frameMs=Math.round(200-(intensity-1)*16.7);
+      // Seeded deterministic PRNG (LCG)
+      let _rng=(s.startMs*1664525+1013904223)&0xffffffff;
+      function skRng(){_rng=(_rng*1664525+1013904223)&0xffffffff;return((_rng>>>1)/0x7fffffff);}
+      const fadeIn=hasFade(s)?(s.fade.inMs||0):0;
+      const fadeOut=hasFade(s)?(s.fade.outMs||0):0;
+      const shakeEnd=(fadeOut>0)?Math.max(s.startMs,s.endMs-fadeOut):s.endMs;
+      // Fade-in frames at base position; shakeStart = actual end of fade frames
+      const shakeStart=fadeIn>0?emitFadeIn(s,mainPenId,mainKey,wpId,'0',displayText,fadeIn,lines):s.startMs;
+      // Shake frames
+      let t=shakeStart;
+      while(t<shakeEnd){
+        const fEnd=Math.min(t+frameMs,shakeEnd);
+        const dah=Math.round((skRng()*2-1)*radius);
+        const dav=Math.round((skRng()*2-1)*radius*0.5);
+        const skAh=Math.max(0,Math.min(100,nah+dah));
+        const skAv=Math.max(0,Math.min(100,nav+dav));
+        const skWpId=getWpId(skAh,skAv,4);
+        lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${skWpId}" ws="1"><s p="${mainPenId}">${escX2(displayText)}</s></p>`);
+        t=fEnd;
+      }
+      // Fade-out frames at base position
+      if(fadeOut>0){
+        const outStepsSk=buildFadeSteps(fadeOut,'out');
+        let t2=shakeEnd;
+        for(const step of outStepsSk){
+          if(t2+step.ms>s.endMs)break;
+          const fpid=getFadePenId(mainKey,step.fo);
+          lines.push(`<p t="${t2}" d="${step.ms}" wp="${wpId}" ws="1"><s p="${fpid}">${escX2(displayText)}</s></p>`);
+          t2+=step.ms;
+        }
+      }
+      return;
+    }
 
     if(!hasKaraoke(s)){
       // Simple static subtitle — emit with stepped fade, using displayText for reverse.text
@@ -1126,8 +1237,110 @@ buildYTT=function(sorted){
           }
         }
       } else {
-        // Static mirror simple — apply fade to ghost if fade is present
-        if (fadeIn > 0 || fadeOut > 0) {
+        // Static mirror simple
+        if(s.fadeworks){
+          // FadeWorks ghost — same character wipe at reduced opacity
+          const fw=s.fadeworks;
+          const gchars=[...mirDisplayText];
+          const gnc=gchars.length;
+          const GFW_TRAIL=3,GFW_FRAME=67;
+          function fwGhostPen(pct){
+            const rawFo=Math.round(pct/100*254);
+            const fadeFo=Math.round(rawFo*opacityFrac);
+            const foPercent=Math.round(fadeFo/254*100);
+            const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:foPercent,bgAlpha:ghostBgAlpha});
+            getPenId(k);return penIndex.get(k)??ghostPenId;
+          }
+          const fwGPens=[0,17,50,83,100].map(pct=>fwGhostPen(pct));
+          function fwGEase(t){
+            const a=1+(fw.accel||0)*2,d=1+(fw.decel||0)*2;
+            if((fw.accel||0)>0.01&&(fw.decel||0)>0.01)return t<0.5?Math.pow(2*t,a)/2:1-Math.pow(2*(1-t),d)/2;
+            if((fw.accel||0)>0.01)return Math.pow(t,a);
+            if((fw.decel||0)>0.01)return 1-Math.pow(1-t,d);
+            return t;
+          }
+          function fwGReveal(ci){
+            const parts=[];
+            const fe=Math.max(0,ci-GFW_TRAIL);
+            if(fe>0)parts.push(`<s p="${fwGPens[4]}">${escX2(gchars.slice(0,fe).join(''))}</s>`);
+            for(let i=0;i<GFW_TRAIL;i++){const idx=ci-GFW_TRAIL+i;if(idx>=0&&idx<gnc)parts.push(`<s p="${fwGPens[i+1]}">${escX2(gchars[idx])}</s>`);}
+            if(ci<gnc)parts.push(`<s p="${fwGPens[0]}">${escX2(gchars.slice(ci).join(''))}</s>`);
+            return parts;
+          }
+          function fwGHide(ci){
+            const parts=[];
+            if(ci>0)parts.push(`<s p="${fwGPens[0]}">${escX2(gchars.slice(0,ci).join(''))}</s>`);
+            for(let i=0;i<GFW_TRAIL;i++){const idx=ci+i;if(idx>=0&&idx<gnc)parts.push(`<s p="${fwGPens[i+1]}">${escX2(gchars[idx])}</s>`);}
+            const fs=Math.min(gnc,ci+GFW_TRAIL);if(fs<gnc)parts.push(`<s p="${fwGPens[4]}">${escX2(gchars.slice(fs).join(''))}</s>`);
+            return parts;
+          }
+          const gfwIn=Math.max(0,fw.inMs||0),gfwOut=Math.max(0,fw.outMs||0);
+          const gfwHoldMs=Math.max(0,subDur-gfwIn-gfwOut);
+          if(gfwIn>0&&gnc>0){
+            let t=s.startMs;const gInEnd=s.startMs+gfwIn;
+            while(t<gInEnd){
+              const fEnd=Math.min(t+GFW_FRAME,gInEnd);
+              const ci=Math.max(0,Math.min(gnc,Math.floor(fwGEase(Math.min(1,(t-s.startMs)/gfwIn))*gnc)));
+              const parts=fwGReveal(ci);
+              if(parts.length)lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${ghostWpId}" ws="0">${parts.join('')}</p>`);
+              t=fEnd;
+            }
+          }
+          const gfwHoldStart=s.startMs+gfwIn;
+          if(gfwHoldMs>0)lines.push(`<p t="${gfwHoldStart}" d="${gfwHoldMs}" wp="${ghostWpId}" ws="0"><s p="${fwGPens[4]}">${escX2(mirDisplayText)}</s></p>`);
+          const gfwOutStart=gfwHoldStart+gfwHoldMs;
+          if(gfwOut>0&&gnc>0){
+            let t=gfwOutStart;const gOutEnd=s.endMs;
+            while(t<gOutEnd){
+              const fEnd=Math.min(t+GFW_FRAME,gOutEnd);
+              const ci=Math.max(0,Math.min(gnc,Math.floor(fwGEase(Math.min(1,(t-gfwOutStart)/gfwOut))*gnc)));
+              const parts=fwGHide(ci);
+              if(parts.length)lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${ghostWpId}" ws="0">${parts.join('')}</p>`);
+              t=fEnd;
+            }
+          }
+        } else if(s.shake){
+          // Shake ghost: same random positions mirrored, at reduced opacity
+          const sk=s.shake;
+          const gRadius=Math.max(1,Math.min(20,sk.radius||5));
+          const gIntensity=Math.max(1,Math.min(10,sk.intensity||5));
+          const gFrameMs=Math.round(200-(gIntensity-1)*16.7);
+          let _grng=(s.startMs*1664525+1013904223)&0xffffffff;
+          function skGRng(){_grng=(_grng*1664525+1013904223)&0xffffffff;return((_grng>>>1)/0x7fffffff);}
+          const gFadeIn=hasFade(s)?(s.fade.inMs||0):0;
+          const gFadeOut=hasFade(s)?(s.fade.outMs||0):0;
+          // Ghost main pos
+          const pos2=s.style.position||2;
+          const[goah,goav]=posToAhAv[pos2]||[50,100];
+          const[gmah,gmav]=mirrorPos(goah,goav);
+          if(gFadeIn>0){
+            const inStepsSk=buildFadeSteps(gFadeIn,'in');
+            let t=s.startMs;
+            for(const step of inStepsSk){
+              const fadeFo=Math.round(step.fo*opacityFrac);const foPercent=Math.round(fadeFo/254*100);
+              const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:foPercent,bgAlpha:ghostBgAlpha});getPenId(k);const gfpid=penIndex.get(k)??ghostPenId;
+              lines.push(`<p t="${t}" d="${step.ms}" wp="${getWpId(gmah,gmav,4)}" ws="0"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);t+=step.ms;
+            }
+          }
+          const gSkStart=s.startMs+gFadeIn;const gSkEnd=s.endMs-gFadeOut;
+          let t=gSkStart;
+          while(t<gSkEnd){
+            const fEnd=Math.min(t+gFrameMs,gSkEnd);
+            const dah=Math.round((skGRng()*2-1)*gRadius);const dav=Math.round((skGRng()*2-1)*gRadius*0.5);
+            const skAh=Math.max(0,Math.min(100,goah+dah));const skAv=Math.max(0,Math.min(100,goav+dav));
+            const[mskAh,mskAv]=mirrorPos(skAh,skAv);const skGWp=getWpId(mskAh,mskAv,4);
+            lines.push(`<p t="${t}" d="${Math.max(1,fEnd-t)}" wp="${skGWp}" ws="1"><s p="${ghostPenId}">${escX2(mirDisplayText)}</s></p>`);t=fEnd;
+          }
+          if(gFadeOut>0){
+            const outStepsSk=buildFadeSteps(gFadeOut,'out');let t2=gSkEnd;
+            for(const step of outStepsSk){
+              if(t2+step.ms>s.endMs)break;
+              const fadeFo=Math.round(step.fo*opacityFrac);const foPercent=Math.round(fadeFo/254*100);
+              const k=JSON.stringify({...s.style,_fc:s.style.textColor,_fo:foPercent,bgAlpha:ghostBgAlpha});getPenId(k);const gfpid=penIndex.get(k)??ghostPenId;
+              lines.push(`<p t="${t2}" d="${step.ms}" wp="${getWpId(gmah,gmav,4)}" ws="0"><s p="${gfpid}">${escX2(mirDisplayText)}</s></p>`);t2+=step.ms;
+            }
+          }
+        } else if (fadeIn > 0 || fadeOut > 0) {
           const inStepsMir = buildFadeSteps(fadeIn, 'in');
           const outStepsMir = buildFadeSteps(fadeOut, 'out');
           // Helper: get a ghost pen at a given raw fo (0-254), scaled by opacityFrac

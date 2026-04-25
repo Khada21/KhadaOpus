@@ -120,8 +120,8 @@ const _origBuildYTT_skf=buildYTT;
 buildYTT=function(sorted){
   const expanded=[];
   sorted.forEach(s=>{
-    // Only expand plain subs; Move/Karaoke subs pass through unchanged.
-    if(!hasStyleKf(s)||hasMove(s)||hasKaraoke(s)){expanded.push(s);return;}
+    // Only expand plain subs; Move/Karaoke/FadeWorks/Shake subs pass through unchanged.
+    if(!hasStyleKf(s)||hasMove(s)||hasKaraoke(s)||s.fadeworks||s.shake){expanded.push(s);return;}
     const FPS=10;
     const frameDurMs=1000/FPS;
     const totalDur=Math.max(1,s.endMs-s.startMs);
