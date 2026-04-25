@@ -55,6 +55,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .tb-btn:hover{border-color:var(--text2);color:var(--text)}
 .tb-btn.primary{background:var(--red);border-color:var(--red);color:#fff}
 .tb-btn.primary:hover{background:#ff5146}
+.tb-btn.success{background:var(--green);border-color:var(--green);color:#000}
+.tb-btn.success:hover{background:#3de06b}
 .workspace{flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0}
 .left-pane{display:flex;flex-direction:column;overflow:hidden;min-width:200px;flex-shrink:0}
 
@@ -423,7 +425,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .ke-btn-row .ke-tbtn{flex:1;justify-content:center}
 /* Toolbar button style */
 .ke-tbtn{display:flex;align-items:center;justify-content:center;height:28px;padding:0 10px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:10px;font-weight:700;cursor:pointer;transition:all .12s;white-space:nowrap;border-radius:2px}
-.ke-tbtn:hover{background:var(--panel3);border-color:#555;color:var(--text)}
+.ke-tbtn:hover:not(:disabled){background:var(--panel3);border-color:#555;color:var(--text)}
+.ke-tbtn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 
 /* Waveform canvas area */
 .ke-wave-wrap{position:relative;flex-shrink:0;background:#0a0a0e;border-bottom:1px solid var(--border);overflow:hidden;cursor:pointer;min-height:120px;height:120px}
@@ -434,6 +437,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .ke-syl-row{height:34px;flex-shrink:0;background:#111114;border-bottom:1px solid var(--border);position:relative;z-index:5;user-select:none}
 .ke-syl-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;overflow:hidden;cursor:pointer;user-select:none;box-sizing:border-box;}
 .ke-syl-seg.sel{outline:2px solid #fff;outline-offset:-2px;z-index:2}
+.ke-syl-seg.multi-sel{outline:2px dashed rgba(255,255,255,0.55);outline-offset:-2px;z-index:1}
 /* Edge handles sit ON TOP of the row, positioned at each syllable boundary */
 .ke-syl-edge{position:absolute;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:20;transform:translateX(-50%);background:transparent;transition:background .1s}
 .ke-syl-edge:hover,.ke-syl-edge.dragging{background:rgba(255,255,255,0.25)}
@@ -588,3 +592,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   display:flex;align-items:center;gap:4px;
 }
 .ke-play-syl-btn:hover{background:rgba(80,70,236,.25);border-color:#7b72ff;}
+
+/* KEYFRAME DOT BUTTONS — small diamond toggle next to animatable inspector properties */
+.kf-dot{
+  width:14px;height:14px;padding:0;border-radius:50%;
+  border:1.5px solid var(--text3);background:transparent;
+  cursor:pointer;flex-shrink:0;transition:border-color .15s,background .15s;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.kf-dot::before{
+  content:'◆';font-size:5px;color:transparent;
+  transition:color .15s;
+}
+.kf-dot:hover{border-color:var(--orange);}
+.kf-dot.active{background:var(--orange);border-color:var(--orange);}
+.kf-dot.active::before{color:#fff;}

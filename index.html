@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Khada Opus — Subtitle Editor</title>
+<link rel="icon" type="image/png" href="Logo.png"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -69,7 +70,7 @@
       <button class="tb-btn" onclick="showProjectsModal()" title="View all saved projects">✦ Projects</button>
       <button class="tb-btn" onclick="goHome()">↩ New</button>
       <input type="file" id="topbar-video-input" accept="video/*,audio/*" style="display:none" onchange="loadVideoMidSession(this.files[0]);this.value=''"/>
-      <button class="tb-btn" onclick="document.getElementById('topbar-video-input').click()" title="Load or swap the video without losing your subtitles">▶ Video</button>
+      <button class="tb-btn success" onclick="document.getElementById('topbar-video-input').click()" title="Load or swap the video without losing your subtitles">▶ Import Video</button>
       <button class="tb-btn primary" onclick="openExport()">Export ↓</button>
     </div>
   </div>
@@ -155,7 +156,8 @@
           <div class="video-wrapper" id="vwrap">
             <div class="no-video-state" id="no-video-state">
               <div class="no-video-icon">( ✧◡✧ )</div>
-              <div class="no-video-label">No video loaded · drop a video file to start</div>
+              <div class="no-video-label">No video loaded</div>
+              <button class="tb-btn success" onclick="document.getElementById('topbar-video-input').click()" style="margin-top:10px;pointer-events:all" title="Load a video or audio file">▶ Import Video</button>
             </div>
             <video id="yt-player" style="position:absolute;inset:0;width:100%;height:100%;display:none;z-index:1;object-fit:contain;background:#000;" preload="auto" playsinline></video>
             <!-- Move path overlay — SVG for reliable mouse events -->
@@ -173,7 +175,7 @@
         </button>
         <button class="vc-btn" onclick="skipTime(-5)" data-tip="Skip back 5s" data-tipkey-id="tip-skip-back-key">«</button>
         <button class="vc-btn" onclick="skipTime(5)" data-tip="Skip forward 5s" data-tipkey-id="tip-skip-fwd-key">»</button>
-        <button class="vc-btn" id="btn-loop-block" onclick="loopSelectedBlock()" data-tip="Play selected block (Space when block selected)" title="Play the selected subtitle block once" style="font-size:9px;letter-spacing:.5px;padding:0 7px;color:var(--text3)">
+        <button class="vc-btn" id="btn-loop-block" onclick="loopSelectedBlock()" data-tip="Play selected block" data-tipkey-id="tip-loop-key" title="Play the selected subtitle block once" style="font-size:9px;letter-spacing:.5px;padding:0 7px;color:var(--text3)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
         </button>
         <div class="timecode"><span id="cur-t">0:00.000</span><span style="color:var(--text3)"> / </span><span id="dur-t">3:00</span></div>
@@ -189,7 +191,7 @@
           </select>
         </div>
         <div style="width:1px;height:14px;background:var(--border2);margin:0 4px"></div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="shortcut-hint">SPACE · Q=in · E=out · Shift+click=multi ✧</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="shortcut-hint">SPACE=play · ALT=play block · Q=in · E=out · Shift+click=multi ✧</div>
       </div>
 
       <!-- YTT Warning -->
@@ -304,6 +306,7 @@
                 <label class="fl" style="margin:0;white-space:nowrap">Size</label>
                 <input type="range" id="fsize-sl" min="75" max="300" value="100" oninput="updSty('fontSize',this.value);document.getElementById('fsize-v').textContent=this.value+'%'" style="flex:1;accent-color:var(--blue)"/>
                 <span id="fsize-v" style="font-family:var(--mono);font-size:11px;color:var(--text2);min-width:36px">100%</span>
+                <button class="kf-dot" id="kf-fontSize" onclick="toggleStyleKfDot('fontSize')" title="Add keyframe for font size at current time"></button>
               </div>
             </div>
 
@@ -313,7 +316,7 @@
               <div class="color-row">
                 <div class="cf">
                   <label>Text color</label>
-                  <div class="col-row"><input type="color" id="c-text" value="#ffffff" oninput="updSty('textColor',this.value)"/><input type="range" id="c-text-a" min="0" max="100" value="100" oninput="updSty('textAlpha',this.value)" title="Opacity"/></div>
+                  <div class="col-row"><input type="color" id="c-text" value="#ffffff" oninput="updSty('textColor',this.value)"/><input type="range" id="c-text-a" min="0" max="100" value="100" oninput="updSty('textAlpha',this.value)" title="Opacity"/><button class="kf-dot" id="kf-textColor" onclick="toggleStyleKfDot('textColor')" title="Add keyframe for text color at current time"></button></div>
                 </div>
                 <div class="cf">
                   <label>Background</label>
@@ -338,14 +341,25 @@
               </div>
             </div>
 
-            <!-- Shadow -->
+            <!-- Outline / Shadow -->
             <div class="field">
-              <label>Shadow / Outline</label>
-              <div class="sh-opts">
-                <label class="sh-opt"><input type="checkbox" id="sh-glow" onchange="updSty('shadowGlow',this.checked)"> Glow</label>
-                <label class="sh-opt"><input type="checkbox" id="sh-bevel" onchange="updSty('shadowBevel',this.checked)"> Bevel</label>
-                <label class="sh-opt"><input type="checkbox" id="sh-soft" onchange="updSty('shadowSoft',this.checked)"> Soft shadow</label>
-                <label class="sh-opt"><input type="checkbox" id="sh-hard" onchange="updSty('shadowHard',this.checked)"> Hard shadow</label>
+              <label>Outline / Shadow</label>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div class="cf">
+                  <label>Color</label>
+                  <div class="col-row">
+                    <input type="color" id="c-outline" value="#000000" oninput="updSty('outlineColor',this.value)"/>
+                    <input type="range" id="c-outline-a" min="0" max="100" value="0" oninput="updSty('outlineAlpha',+this.value)" title="Opacity"/>
+                    <button class="kf-dot" id="kf-outlineColor" onclick="toggleStyleKfDot('outlineColor')" title="Add keyframe for outline color at current time"></button>
+                  </div>
+                </div>
+                <div class="cf">
+                  <label>Size</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="range" id="outline-size-sl" min="1" max="20" value="3" oninput="updSty('outlineSize',+this.value);document.getElementById('outline-size-v').textContent=this.value" style="flex:1;accent-color:var(--orange)"/>
+                    <span id="outline-size-v" style="font-family:var(--mono);font-size:11px;color:var(--text2);min-width:24px">3</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -429,13 +443,13 @@
               </button>
             </div>
             <div class="ke-btn-row">
-              <button class="ke-tbtn" onclick="karaSplitAtCursor()" title="Split selected syllable in half">✂ Split</button>
-              <button class="ke-tbtn" onclick="karaJoinSel()" title="Join selected with next">⊞ Join</button>
-              <button class="ke-tbtn" onclick="karaDelSel()" title="Delete selected syllable">✕ Del</button>
+              <button class="ke-tbtn" id="ke-btn-split" onclick="karaSplitAtCursor()" title="Split selected syllable in half">✂ Split</button>
+              <button class="ke-tbtn" id="ke-btn-join" onclick="karaJoinSel()" title="Join selected syllable with the next one">⊞ Join</button>
+              <button class="ke-tbtn" id="ke-btn-del" onclick="karaDelSel()" title="Delete selected syllable">✕ Del</button>
             </div>
             <div class="ke-btn-row">
-              <button class="ke-tbtn" onclick="karaAutoSplit()" title="Re-split by words">↺ By Word</button>
-              <button class="ke-tbtn" onclick="karaAutoSplitChars()" title="Re-split by character">Aa By Char</button>
+              <button class="ke-tbtn" onclick="karaAutoSplit()" title="Re-split all syllables by words">↺ By Word</button>
+              <button class="ke-tbtn" id="ke-btn-autochars" onclick="karaAutoSplitChars()" title="Re-split all syllables by character">Aa By Char</button>
               <button class="ke-tbtn" onclick="karaAddSyl()" title="Add syllable at end">+ Add</button>
             </div>
             <button class="ke-del-fx" onclick="removeKaraokeFromSub(subs.find(s=>s.id===karaEditId))">✕ Remove Karaoke Effect</button>
@@ -649,7 +663,7 @@
 
       <div class="hm-sec">
         <div class="hm-hd">🎬 Getting Started</div>
-        <div class="hm-bd">Paste a YouTube URL on the landing screen and click <b>Load →</b> to open a video. Or click <b>start editing without a video</b> to work on subtitles alone. Use <b>↩ New</b> in the topbar to go back to the landing screen.</div>
+        <div class="hm-bd">On the landing screen: click <b>Upload Video</b> (or drag a file onto it) to open a video file. Already have subtitles? Click <b>Import Subtitles</b> to load a .srt, .vtt, or .ytt file. Or click <b>start a new blank project</b> to work without a video.<br><br>Already in the editor: use the green <b>▶ Import Video</b> button in the topbar to load or swap the video without losing your subtitles. Use <b>↩ New</b> to return to the landing screen.</div>
       </div>
 
       <div class="hm-sec">
@@ -772,6 +786,18 @@
 <!-- Block Context Menu -->
 <div id="block-ctx-menu" style="display:none;position:fixed;z-index:800;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:4px 0;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
 
-<script src="app.js"></script>
+<script src="js/core.js"></script>
+<script src="js/import.js"></script>
+<script src="js/video.js"></script>
+<script src="js/playback.js"></script>
+<script src="js/timeline.js"></script>
+<script src="js/keybinds.js"></script>
+<script src="js/export.js"></script>
+<script src="js/karaoke.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/move.js"></script>
+<script src="js/stylekf.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/features.js"></script>
 </body>
 </html>
