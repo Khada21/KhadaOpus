@@ -16,6 +16,7 @@ function deepCloneState(){
     reverse:s.reverse?{...s.reverse}:undefined,
     _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined,
     styleKfs:s.styleKfs?{frames:s.styleKfs.frames.map(f=>({...f}))}:undefined,
+    chroma:s.chroma?{...s.chroma}:undefined,
   })),tracks:[...tracks]});
 }
 
@@ -89,6 +90,7 @@ function saveProject(){
         reverse:s.reverse?{...s.reverse}:undefined,
         _compound:s._compound?s._compound.map(c=>JSON.parse(JSON.stringify(c))):undefined,
         styleKfs:s.styleKfs?{frames:s.styleKfs.frames.map(f=>({...f}))}:undefined,
+        chroma:s.chroma?{...s.chroma}:undefined,
       })),
       tracks:[...tracks],
     };
