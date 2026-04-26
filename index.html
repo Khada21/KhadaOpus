@@ -14,31 +14,45 @@
 
 <!-- LANDING -->
 <div id="landing">
-  <div class="lbg"></div>
+  <div class="lbg">
+    <div class="l-orb l-orb-a"></div>
+    <div class="l-orb l-orb-b"></div>
+    <div class="l-orb l-orb-c"></div>
+    <canvas id="land-particles"></canvas>
+  </div>
+
   <div class="logo-mark">
     <div class="logo-icon">✧◡✧</div>
     <div class="logo-text"><span class="k">Khada</span> <span class="o">Opus</span></div>
   </div>
-  <h1 class="land-h1">Edit subtitles.<br><em>No software needed.</em></h1>
-  <p class="land-sub">✧ Drop a video · import subtitles · export styled .ytt ✧</p>
 
-  <!-- Action buttons row -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;animation:fadeUp .8s .25s both">
-    <div class="upload-drop-zone" id="upload-drop-zone" onclick="document.getElementById('video-file-input').click()" style="width:auto;padding:18px 28px;flex-direction:row;gap:14px">
+  <h1 class="land-h1">Edit subtitles.<br><em>No software needed.</em></h1>
+  <p class="land-sub">Drop a video · import subtitles · export styled .ytt ✧</p>
+
+  <!-- Action cards -->
+  <div class="land-actions">
+    <div class="land-card" id="upload-drop-zone" onclick="document.getElementById('video-file-input').click()">
       <input type="file" id="video-file-input" accept="video/*,audio/*" style="display:none" onchange="handleFileLoad(this.files[0])"/>
-      <div class="upload-icon" style="font-size:22px">▶</div>
-      <div class="upload-label" style="text-align:left;font-size:12px">
-        <b style="color:var(--text)">Upload Video</b><br>
-        <span style="opacity:.5;font-size:11px">MP4, MKV, WebM, MOV, MP3 …</span>
+      <div class="land-card-icon land-card-icon--red">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       </div>
+      <div class="land-card-body">
+        <span class="land-card-title">Upload Video</span>
+        <span class="land-card-sub">MP4 · MKV · WebM · MOV · MP3 — or drag &amp; drop</span>
+      </div>
+      <div class="land-card-arr">→</div>
     </div>
-    <div class="upload-drop-zone" onclick="document.getElementById('import-file-input').click()" style="width:auto;padding:18px 28px;flex-direction:row;gap:14px;border-color:rgba(191,90,242,.3)" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='rgba(191,90,242,.3)'">
+
+    <div class="land-card land-card--purple" onclick="document.getElementById('import-file-input').click()">
       <input type="file" id="import-file-input" accept=".srt,.vtt,.ytt,.xml" style="display:none" onchange="importFile(this.files[0])"/>
-      <div class="upload-icon" style="font-size:22px;color:var(--purple)">⬇</div>
-      <div class="upload-label" style="text-align:left;font-size:12px">
-        <b style="color:var(--text)">Import Subtitles</b><br>
-        <span style="opacity:.5;font-size:11px">.srt · .vtt · .ytt</span>
+      <div class="land-card-icon land-card-icon--purple">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#bf5af2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </div>
+      <div class="land-card-body">
+        <span class="land-card-title">Import Subtitles</span>
+        <span class="land-card-sub">.srt · .vtt · .ytt — native files re-open perfectly</span>
+      </div>
+      <div class="land-card-arr" style="color:rgba(191,90,242,.55)">→</div>
     </div>
   </div>
 
@@ -46,14 +60,15 @@
   <div class="proc-status" id="proc-status"></div>
 
   <!-- Saved projects -->
-  <div id="projects-grid" style="display:none;width:min(520px,88vw);margin-top:16px;animation:fadeUp .8s .35s both"></div>
+  <div id="projects-grid" style="display:none;width:min(520px,88vw);margin-top:20px;animation:fadeUp .8s .38s both"></div>
 
-  <div class="land-chips" style="margin-top:20px">
-    <div class="chip">( ✧◡✧ ) Multi-track</div>
-    <div class="chip">( ✧◡✧ ) Full .ytt styling</div>
-    <div class="chip">( ✧◡✧ ) 100% free</div>
+  <div class="land-chips">
+    <div class="chip" style="--ci:0"><span class="chip-dot" style="background:#ff3b30"></span>Multi-track timeline</div>
+    <div class="chip" style="--ci:1"><span class="chip-dot" style="background:#bf5af2"></span>Full .ytt styling</div>
+    <div class="chip" style="--ci:2"><span class="chip-dot" style="background:#30d158"></span>100% free · no login</div>
+    <div class="chip" style="--ci:3"><span class="chip-dot" style="background:#0a84ff"></span>Re-editable .ytt files</div>
   </div>
-  <div class="land-skip">or <a onclick="startNewProject()">start a new blank project ✧</a></div>
+  <div class="land-skip">or <a onclick="startNewProject()">start a blank project ✧</a></div>
 </div>
 
 <!-- EDITOR -->
@@ -1103,5 +1118,85 @@ Try: <em>"delete all subtitle blocks"</em> · <em>"make selected subtitle do a c
 <script src="js/tracker.js"></script>
 <script src="js/dragtool.js"></script>
 <script src="js/ai.js"></script>
+<script>
+(function(){
+  // ── Letter-by-letter headline + logo char reveal ──
+  function initLandingAnims(){
+    // Split "Edit subtitles." text node into per-char spans
+    const h1=document.querySelector('.land-h1');
+    if(h1){
+      let ci=0;
+      Array.from(h1.childNodes).forEach(function(node){
+        if(node.nodeType===3&&node.textContent.trim()){
+          var text=node.textContent,frag=document.createDocumentFragment();
+          for(var i=0;i<text.length;i++){
+            var sp=document.createElement('span');
+            sp.className='l-ch';
+            sp.style.setProperty('--i',ci++);
+            sp.textContent=text[i]===' '?' ':text[i];
+            frag.appendChild(sp);
+          }
+          h1.replaceChild(frag,node);
+        }
+      });
+    }
+    // Wrap logo "Khada" and "Opus" chars
+    var li=0;
+    document.querySelectorAll('.logo-text .k,.logo-text .o').forEach(function(el){
+      var txt=el.textContent;
+      el.innerHTML='';
+      for(var i=0;i<txt.length;i++){
+        var sp=document.createElement('span');
+        sp.className='l-logo-ch';
+        sp.style.setProperty('--li',li++);
+        sp.textContent=txt[i];
+        el.appendChild(sp);
+      }
+    });
+    // Particle canvas
+    initLandParticles();
+  }
+
+  // ── Floating ambient particles ──
+  function initLandParticles(){
+    var canvas=document.getElementById('land-particles');
+    if(!canvas)return;
+    var ctx=canvas.getContext('2d');
+    var W=0,H=0,particles=[],rid=0;
+    var COLS=['255,59,48','191,90,242','10,132,255','48,209,88'];
+    function resize(){W=canvas.width=canvas.offsetWidth;H=canvas.height=canvas.offsetHeight;}
+    function mkP(){
+      return{x:Math.random()*W,y:H*(0.35+Math.random()*0.65),
+        r:Math.random()*1.2+0.25,vy:-(Math.random()*.42+.16),vx:(Math.random()-.5)*.18,
+        maxA:Math.random()*.28+.06,life:0,maxLife:Math.random()*260+130,
+        col:COLS[Math.floor(Math.random()*4)]};
+    }
+    function tick(){
+      ctx.clearRect(0,0,W,H);
+      while(particles.length<44)particles.push(mkP());
+      particles=particles.filter(function(p){
+        p.x+=p.vx;p.y+=p.vy;p.life++;
+        var t=p.life/p.maxLife;
+        var a=p.maxA*(t<.12?t/.12:t>.82?(1-t)/.18:1);
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.283);
+        ctx.fillStyle='rgba('+p.col+','+a.toFixed(3)+')';ctx.fill();
+        return t<1&&p.y>-6;
+      });
+      rid=requestAnimationFrame(tick);
+    }
+    resize();
+    if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(canvas);
+    tick();
+    // Stop RAF when landing is hidden (user entered editor)
+    var landing=document.getElementById('landing');
+    new MutationObserver(function(){
+      if(landing.style.display==='none')cancelAnimationFrame(rid);
+    }).observe(landing,{attributes:true,attributeFilter:['style']});
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initLandingAnims);
+  else initLandingAnims();
+})();
+</script>
 </body>
 </html>
