@@ -29,7 +29,8 @@ function _getOvEl(subId){
 // Cache for non-position style strings per sub — only rebuild when style changes
 const _ovStyleCache={};
 
-function _getBaseStyle(s,gi,kfOverrides){
+function _getBaseStyle(s,gi,kfOverrides,baseFontPx){
+  if(baseFontPx==null)baseFontPx=16;
   const st=kfOverrides?{...s.style,...kfOverrides}:s.style;
   const oa=st.outlineAlpha??0;
   const ot=st.outlineType??0;
@@ -40,10 +41,10 @@ function _getBaseStyle(s,gi,kfOverrides){
     ?`;text-shadow:${sz}px 0 0 ${ha(oc,oa)},-${sz}px 0 0 ${ha(oc,oa)},0 ${sz}px 0 ${ha(oc,oa)},0 -${sz}px 0 ${ha(oc,oa)},${sz}px ${sz}px 0 ${ha(oc,oa)},-${sz}px ${sz}px 0 ${ha(oc,oa)},${sz}px -${sz}px 0 ${ha(oc,oa)},-${sz}px -${sz}px 0 ${ha(oc,oa)}`
     :'';
   const kfKey=kfOverrides?`;kf${JSON.stringify(kfOverrides)}`:'';
-  const key=`${s.id}_${st.bold}_${st.italic}_${st.underline}_${st.font}_${st.fontSize}_${st.textColor}_${st.textAlpha}_${st.bgColor}_${st.bgAlpha}_${oa}_${ot}_${sz}_${oc}_${gi}${kfKey}`;
+  const key=`${s.id}_${st.bold}_${st.italic}_${st.underline}_${st.font}_${st.fontSize}_${st.textColor}_${st.textAlpha}_${st.bgColor}_${st.bgAlpha}_${oa}_${ot}_${sz}_${oc}_${gi}_bfp${baseFontPx}${kfKey}`;
   if(_ovStyleCache[s.id]===key)return null;
   _ovStyleCache[s.id]=key;
-  return `z-index:${20+gi};font-weight:${st.bold?700:400};font-style:${st.italic?'italic':'normal'};text-decoration:${st.underline?'underline':'none'};background:${ha(st.bgColor,st.bgAlpha)};font-family:'${st.font}',sans-serif;font-size:${16*(st.fontSize/100)}px;color:${ha(st.textColor,st.textAlpha)}${shadowCss}`;
+  return `z-index:${20+gi};font-weight:${st.bold?700:400};font-style:${st.italic?'italic':'normal'};text-decoration:${st.underline?'underline':'none'};background:${ha(st.bgColor,st.bgAlpha)};font-family:'${st.font}',sans-serif;font-size:${baseFontPx*(st.fontSize/100)}px;color:${ha(st.textColor,st.textAlpha)}${shadowCss}`;
 }
 
 const posCSS_map={
@@ -65,6 +66,11 @@ function startRaf(){
   const tcEl=document.getElementById('tl-tc');
   const scEl=document.getElementById('tl-scroll');
   const vwrap=document.getElementById('vwrap');
+
+  // Invalidate style cache when vwrap resizes so font scales update immediately
+  if(typeof ResizeObserver!=='undefined'){
+    new ResizeObserver(()=>{ Object.keys(_ovStyleCache).forEach(k=>delete _ovStyleCache[k]); }).observe(vwrap);
+  }
 
   (function loop(now){
     const dt=now-last;last=now;
@@ -108,6 +114,7 @@ function _getDisplayText(sub){
 }
 
 function _updOvFast(vwrap){
+  const baseFontPx=Math.max(8,Math.round((vwrap.offsetHeight||360)*0.0444));
   const active=subs.filter(s=>curMs>=s.startMs&&curMs<=s.endMs);
   const activeIds=new Set(active.map(s=>s.id));
 
@@ -144,7 +151,7 @@ function _updOvFast(vwrap){
     if(!el.parentNode)vwrap.appendChild(el);
 
     // Update style only if changed
-    const newBase=_getBaseStyle(s,gi,kfOverrides);
+    const newBase=_getBaseStyle(s,gi,kfOverrides,baseFontPx);
     if(newBase)el.style.cssText='position:absolute;pointer-events:none;border-radius:2px;padding:5px 14px;max-width:82%;text-align:center;white-space:pre-wrap;will-change:transform;'+newBase;
 
     // ── Position — always clear all props first to avoid stale values ──
@@ -183,18 +190,146 @@ function _updOvFast(vwrap){
       const elapsed=curMs-s.startMs;
       const mainColor=ha(st.textColor,st.textAlpha);
       const preColor=ha(kd.preColor||'#5046EC',kd.preAlpha??100);
-      // Reverse timing: traverse syllables in reverse order
       const revTiming=s.reverse&&s.reverse.timing;
       const displaySyls=revTiming?[...syls].reverse():syls;
       let cumMs=0,asi=-1;
       for(let i=0;i<displaySyls.length;i++){if(elapsed>=cumMs&&elapsed<cumMs+displaySyls[i].durMs){asi=i;break;}cumMs+=displaySyls[i].durMs;}
       if(asi===-1&&elapsed>=cumMs)asi=displaySyls.length;
       let html='';
-      displaySyls.forEach((syl,i)=>{html+=`<span style="color:${i<=asi?preColor:mainColor}">${escH(syl.text)}</span>`;});
+      if(kd.animation==='ytk-fade'){
+        // YTK Fade: preColor=unsunk, mainColor=sung, active syl interpolates preColor→mainColor
+        const _ytkSteps=kd.animSpeed||4;
+        let cumMs2=0;
+        displaySyls.forEach((syl,i)=>{
+          if(i<asi){
+            html+=`<span style="color:${mainColor}">${escH(syl.text)}</span>`;
+          } else if(i===asi){
+            const sylElapsed=elapsed-cumMs2;
+            const N=Math.min(_ytkSteps,Math.floor(Math.max(1,syl.durMs)/67));
+            const step=Math.min(N,Math.floor(sylElapsed/67));
+            const t=N>0?step/_ytkSteps:1;
+            const pc=kd.preColor||'#5046EC';
+            const mc=st.textColor||'#ffffff';
+            const blended=typeof _lerpHex==='function'?_lerpHex(pc,mc,t):pc;
+            html+=`<span style="color:${ha(blended,kd.preAlpha??100)}">${escH(syl.text)}</span>`;
+          } else {
+            html+=`<span style="color:${preColor}">${escH(syl.text)}</span>`;
+          }
+          cumMs2+=syl.durMs;
+        });
+      } else if(kd.animation==='reveal'){
+        // Reveal: unsunk=invisible, active syl fades opacity 0→100%, sung=mainColor
+        const _revSteps=kd.animSpeed||4;
+        let cumMs2=0;
+        displaySyls.forEach((syl,i)=>{
+          if(i<asi){
+            html+=`<span style="color:${mainColor}">${escH(syl.text)}</span>`;
+          } else if(i===asi){
+            const sylElapsed=elapsed-cumMs2;
+            const N=Math.min(_revSteps,Math.floor(Math.max(1,syl.durMs)/67));
+            const step=Math.min(N,Math.floor(sylElapsed/67));
+            const opacity=N>0?(step/_revSteps):1;
+            const mc=st.textColor||'#ffffff';
+            html+=`<span style="color:${mc};opacity:${opacity.toFixed(3)}">${escH(syl.text)}</span>`;
+          } else {
+            html+=`<span style="opacity:0;color:${mainColor}">${escH(syl.text)}</span>`;
+          }
+          cumMs2+=syl.durMs;
+        });
+      } else {
+        // Normal karaoke: preColor=unsunk (pre-karaoke), mainColor=sung (post-karaoke)
+        displaySyls.forEach((syl,i)=>{html+=`<span style="color:${i<asi?mainColor:preColor}">${escH(syl.text)}</span>`;});
+      }
       el.innerHTML=html;
+    } else if(typeof hasFadeWorks==='function'&&hasFadeWorks(s)){
+      // ── FadeWorks preview: per-character opacity spans ──
+      const fw=s.fadeworks;
+      const msRel=Math.max(0,curMs-s.startMs);
+      const totalDur=Math.max(1,s.endMs-s.startMs);
+      const fwMode=fw.mode||'both';
+      const fwDir=fw.direction||'ltr';
+      const effectiveIn=fwMode==='out-only'?0:Math.max(0,fw.inMs||0);
+      const effectiveOut=fwMode==='in-only'?0:Math.max(0,fw.outMs||0);
+      const fwHoldMs=Math.max(0,totalDur-effectiveIn-effectiveOut);
+      const fwOutStart=effectiveIn+fwHoldMs;
+      const FW_TRAIL=3;
+      const FW_ALPHAS=[0,0.17,0.5,0.83,1.0];
+      function _fwEasePrev(t2,ac,dc){
+        const a=1+(ac||0)*2,d=1+(dc||0)*2;
+        if((ac||0)>0.01&&(dc||0)>0.01)return t2<0.5?Math.pow(2*t2,a)/2:1-Math.pow(2*(1-t2),d)/2;
+        if((ac||0)>0.01)return Math.pow(t2,a);
+        if((dc||0)>0.01)return 1-Math.pow(1-t2,d);
+        return t2;
+      }
+      const rawChars=[..._getDisplayText(s)];
+      const sweepChars=fwDir==='rtl'?rawChars.slice().reverse():rawChars;
+      const nc=sweepChars.length;
+      let phase='hold',ci=0;
+      if(msRel<effectiveIn&&effectiveIn>0){
+        phase='reveal';
+        ci=Math.max(0,Math.min(nc,Math.floor(_fwEasePrev(msRel/effectiveIn,fw.accel||0,fw.decel||0)*nc)));
+      } else if(msRel>=fwOutStart&&effectiveOut>0){
+        phase='hide';
+        ci=Math.max(0,Math.min(nc,Math.floor(_fwEasePrev((msRel-fwOutStart)/effectiveOut,fw.accel||0,fw.decel||0)*nc)));
+      }
+      // Build alpha per sweep-order char, then map back to display order
+      const sweepAlphas=sweepChars.map((_,i)=>{
+        if(phase==='hold')return 1;
+        if(phase==='reveal'){
+          if(i<ci-FW_TRAIL)return 1;
+          const ti=i-(ci-FW_TRAIL);
+          return(ti>=0&&ti<FW_TRAIL)?FW_ALPHAS[FW_TRAIL-ti]:0;
+        }
+        if(i<ci)return 0;
+        const ti=i-ci;
+        return ti<FW_TRAIL?FW_ALPHAS[ti+1]:1;
+      });
+      const curColor=ha(st.textColor||'#ffffff',st.textAlpha!==undefined?st.textAlpha:100);
+      el.innerHTML=rawChars.map((ch,i)=>{
+        const j=fwDir==='rtl'?nc-1-i:i;
+        const a=sweepAlphas[j]!==undefined?sweepAlphas[j]:1;
+        if(a>=1)return`<span style="color:${curColor}">${escH(ch)}</span>`;
+        if(a<=0)return`<span style="color:${curColor};opacity:0">${escH(ch)}</span>`;
+        return`<span style="color:${curColor};opacity:${a.toFixed(3)}">${escH(ch)}</span>`;
+      }).join('');
     } else {
       const displayText=_getDisplayText(s);
       if(el.textContent!==displayText){el.textContent=displayText;}
+    }
+
+    // ── Shake preview: translate jitter ──
+    if(typeof hasShake==='function'&&hasShake(s)){
+      const sk=s.shake;
+      const radius=Math.max(1,Math.min(20,sk.radius||5));
+      const intensity=Math.max(1,Math.min(10,sk.intensity||5));
+      const phase=(s.startMs%6284)*0.001;
+      const t=curMs*0.003*(0.5+intensity*0.1);
+      const dx=Math.sin(t*13.7+phase)*radius*1.2;
+      const dy=Math.cos(t*11.3+phase*1.3)*radius*0.5;
+      el.style.transform=(el.style.transform&&el.style.transform!=='none'?el.style.transform+' ':'')+`translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px)`;
+    }
+
+    // ── Chroma preview: RGB text-shadow aberration ──
+    if(typeof hasChroma==='function'&&hasChroma(s)){
+      const chr=s.chroma;
+      const offset=Math.max(1,chr.offset||4);
+      const flashMs=chr.flashMs!==undefined?chr.flashMs:100;
+      const msRel=curMs-s.startMs;
+      const totalDur=Math.max(1,s.endMs-s.startMs);
+      const inFlash=flashMs===0||msRel<flashMs||msRel>totalDur-flashMs;
+      // Recompute full textShadow (outline + optional chroma) to avoid stale state
+      const oa=st.outlineAlpha??0,ot2=st.outlineType??0;
+      const sz=st.outlineSize||3,oc=st.outlineColor||'#000000';
+      const hasOut=oa>0&&ot2>0;
+      const outParts=hasOut?[
+        `${sz}px 0 0 ${ha(oc,oa)}`,`-${sz}px 0 0 ${ha(oc,oa)}`,
+        `0 ${sz}px 0 ${ha(oc,oa)}`,`0 -${sz}px 0 ${ha(oc,oa)}`,
+        `${sz}px ${sz}px 0 ${ha(oc,oa)}`,`-${sz}px ${sz}px 0 ${ha(oc,oa)}`,
+        `${sz}px -${sz}px 0 ${ha(oc,oa)}`,`-${sz}px -${sz}px 0 ${ha(oc,oa)}`
+      ]:[];
+      const px=Math.max(1,Math.round(offset*0.5));
+      const chrParts=inFlash?[`-${px}px 0 rgba(255,0,0,.55)`,`${px}px 0 rgba(0,0,255,.55)`]:[];
+      el.style.textShadow=[...outParts,...chrParts].join(', ');
     }
   });
 

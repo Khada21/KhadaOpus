@@ -14,6 +14,7 @@ function _wrapYTTWithSig(yttXml){
       chroma:s.chroma?{...s.chroma}:undefined,
       fadeworks:s.fadeworks?{...s.fadeworks}:undefined,
       shake:s.shake?{...s.shake}:undefined,
+      tracker:s.tracker?{...s.tracker,keyframes:s.tracker.keyframes?s.tracker.keyframes.map(k=>({...k})):[],sel:s.tracker.sel?{...s.tracker.sel}:null}:undefined,
     })),
     tracks:[...tracks],
     name:document.getElementById('topbar-title')?.textContent||'',

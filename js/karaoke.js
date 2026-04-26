@@ -47,7 +47,7 @@ function applyKaraokeToSub(sub){
   if(hasKaraoke(sub))return;
   const totalMs=sub.endMs-sub.startMs;
   const syllables=_splitIntoWordSyllables(sub.text,totalMs);
-  sub.karaoke={syllables,preColor:'#5046EC',preAlpha:100};
+  sub.karaoke={syllables,preColor:'#5046EC',preAlpha:100,animation:'none',animSpeed:4};
   renderBlocks();renderSL();
 }
 
@@ -257,6 +257,21 @@ function openKaraEditor(id){
     const kprea=document.getElementById('kc-pre-a');
     if(kpre)kpre.value=sub.karaoke.preColor||'#5046EC';
     if(kprea)kprea.value=sub.karaoke.preAlpha??100;
+    // Sync animation buttons
+    const anim=sub.karaoke.animation||'none';
+    ['none','ytk-fade','reveal'].forEach(key=>{
+      const btn=document.getElementById('kara-anim-'+key);
+      if(btn)btn.classList.toggle('active',key===anim);
+    });
+    // Sync speed slider
+    const speedRow=document.getElementById('kara-anim-speed-row');
+    const speedIn=document.getElementById('kara-anim-speed');
+    const speedValEl=document.getElementById('kara-anim-speed-val');
+    const spd=sub.karaoke.animSpeed??4;
+    if(speedRow)speedRow.style.display=(anim==='ytk-fade'||anim==='reveal')?'flex':'none';
+    if(speedIn)speedIn.value=spd;
+    if(speedValEl)speedValEl.textContent=spd;
+    _updKaraAnimDesc(anim);
   }
   const waveEmpty=document.getElementById('ke-wave-empty');
   if(waveEmpty)waveEmpty.style.display='none';
@@ -769,6 +784,31 @@ function karaAddSyl(){
 function karaUpdColor(key,val){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   sub.karaoke[key]=val;
+}
+function karaSetAnimation(v){
+  const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
+  snapshot();
+  sub.karaoke.animation=v;
+  ['none','ytk-fade','reveal'].forEach(key=>{
+    const btn=document.getElementById('kara-anim-'+key);
+    if(btn)btn.classList.toggle('active',key===v);
+  });
+  const speedRow=document.getElementById('kara-anim-speed-row');
+  if(speedRow)speedRow.style.display=(v==='ytk-fade'||v==='reveal')?'flex':'none';
+  _updKaraAnimDesc(v);
+  chkYtt();
+}
+function _updKaraAnimDesc(v){
+  const desc=document.getElementById('kara-anim-desc');if(!desc)return;
+  if(v==='ytk-fade')desc.textContent='YTK Fade: color blends from pre-color → main color as karaoke reaches each syllable.';
+  else if(v==='reveal')desc.textContent='Reveal: letters are invisible until karaoke reaches them, then fade in to main color.';
+  else desc.textContent='None: instant color switch on each syllable.';
+}
+function karaSetAnimSpeed(v){
+  const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
+  sub.karaoke.animSpeed=Math.max(1,Math.min(8,Math.round(+v)));
+  const el=document.getElementById('kara-anim-speed-val');
+  if(el)el.textContent=sub.karaoke.animSpeed;
 }
 function karaSylUpd(key,val){
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke||karaSelSyl===null)return;

@@ -9,11 +9,21 @@ function openExport(){
 function chkYttBool(){return subs.some(s=>{const st=s.style;return st.bold||st.italic||st.underline||st.textColor!=='#ffffff'||st.bgColor!=='#000000'||st.bgAlpha!==60||st.textAlpha!==100||st.font!=='Roboto'||st.fontSize!==100||(st.position&&st.position!==2)||st.shadowGlow||st.shadowBevel||st.shadowSoft||st.shadowHard||st.outlineType>0||st.outlineAlpha>0||s.track>0||hasMove(s)||hasKaraoke(s)||(s.styleKfs&&s.styleKfs.frames&&s.styleKfs.frames.length>0);});}
 function closeExport(){document.getElementById('exp-modal').classList.remove('open');}
 function doExport(fmt){
-  const sorted=[...subs].sort((a,b)=>a.startMs-b.startMs);
+  // Expand compound blocks to their originals before exporting
+  const raw=[...subs].sort((a,b)=>a.startMs-b.startMs);
+  const sorted=[];
+  raw.forEach(s=>{
+    if(s._compound&&s._compound.length>0){
+      s._compound.forEach(c=>sorted.push(JSON.parse(JSON.stringify(c))));
+    } else {
+      sorted.push(s);
+    }
+  });
+  sorted.sort((a,b)=>a.startMs-b.startMs);
   let content='';
   if(fmt==='srt')content=sorted.map((s,i)=>`${i+1}\n${msSRT(s.startMs)} --> ${msSRT(s.endMs)}\n${_getDisplayText(s)}\n`).join('\n');
   else if(fmt==='vtt')content='WEBVTT\n\n'+sorted.map((s,i)=>`${i+1}\n${msVTT(s.startMs)} --> ${msVTT(s.endMs)}\n${_getDisplayText(s)}\n`).join('\n');
-  else content=buildYTT(sorted);
+  else { content=buildYTT(sorted); content='<!-- Made with Khada Opus -->\n'+content; }
 
   // Try Blob download first, fall back to data: URI, fall back to copy modal
   let downloaded=false;

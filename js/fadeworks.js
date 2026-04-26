@@ -18,7 +18,7 @@ function hasFadeWorks(sub) { return !!(sub && sub.fadeworks); }
 
 function applyFadeWorksToSub(sub) {
   if (hasFadeWorks(sub)) return;
-  sub.fadeworks = { inMs: 500, outMs: 500, accel: 0, decel: 0 };
+  sub.fadeworks = { inMs: 500, outMs: 500, accel: 0, decel: 0, direction: 'ltr', mode: 'both' };
   renderBlocks(); renderSL(); chkYtt();
 }
 
@@ -75,6 +75,8 @@ function openFadeWorksEditor(id) {
     document.getElementById('fw-accel-v').textContent = Math.round(fw.accel * 100) + '%';
     document.getElementById('fw-decel').value = fw.decel;
     document.getElementById('fw-decel-v').textContent = Math.round(fw.decel * 100) + '%';
+    _updFwDirBtns(fw.direction || 'ltr');
+    _updFwModeBtns(fw.mode || 'both');
   }
   renderBlocks(); renderSL();
 }
@@ -108,6 +110,20 @@ function fwSetAccel(v) {
 function fwSetDecel(v) {
   const sub = subs.find(s => s.id === fadeWorksEditId); if (!sub || !sub.fadeworks) return;
   sub.fadeworks.decel = Math.min(1, Math.max(0, +v)); chkYtt();
+}
+function fwSetDirection(v) {
+  const sub = subs.find(s => s.id === fadeWorksEditId); if (!sub || !sub.fadeworks) return;
+  sub.fadeworks.direction = v; _updFwDirBtns(v); chkYtt();
+}
+function fwSetMode(v) {
+  const sub = subs.find(s => s.id === fadeWorksEditId); if (!sub || !sub.fadeworks) return;
+  sub.fadeworks.mode = v; _updFwModeBtns(v); chkYtt();
+}
+function _updFwDirBtns(dir) {
+  document.querySelectorAll('.fw-dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === dir));
+}
+function _updFwModeBtns(mode) {
+  document.querySelectorAll('.fw-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 }
 
 // ── Drag-and-drop ─────────────────────────────────────────────────────────────

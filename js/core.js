@@ -19,6 +19,7 @@ function deepCloneState(){
     chroma:s.chroma?{...s.chroma}:undefined,
     fadeworks:s.fadeworks?{...s.fadeworks}:undefined,
     shake:s.shake?{...s.shake}:undefined,
+    tracker:s.tracker?{...s.tracker,keyframes:s.tracker.keyframes?s.tracker.keyframes.map(k=>({...k})):[],sel:s.tracker.sel?{...s.tracker.sel}:null}:undefined,
   })),tracks:[...tracks]});
 }
 
@@ -95,6 +96,7 @@ function saveProject(){
         chroma:s.chroma?{...s.chroma}:undefined,
         fadeworks:s.fadeworks?{...s.fadeworks}:undefined,
         shake:s.shake?{...s.shake}:undefined,
+        tracker:s.tracker?{...s.tracker,keyframes:s.tracker.keyframes?s.tracker.keyframes.map(k=>({...k})):[],sel:s.tracker.sel?{...s.tracker.sel}:null}:undefined,
       })),
       tracks:[...tracks],
     };

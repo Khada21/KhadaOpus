@@ -472,6 +472,17 @@ function mvInitOverlay(){
 }
 
 window.addEventListener('resize',()=>{if(moveEditId)mvDrawOverlay();});
+// Redraw when the video preview panel is resized via dividers (doesn't fire window resize)
+(function(){
+  function _mvObserveVwrap(){
+    const _mvVwrap=document.getElementById('vwrap');
+    if(_mvVwrap&&typeof ResizeObserver!=='undefined'){
+      new ResizeObserver(()=>{if(moveEditId)mvDrawOverlay();}).observe(_mvVwrap);
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_mvObserveVwrap);
+  else _mvObserveVwrap();
+})();
 
 // ── Drag-and-drop Move card onto blocks ──
 (function initMoveDnd(){
@@ -594,7 +605,27 @@ buildYTT=function(sorted){
   }
   sorted.forEach(s=>{
     getPenId(JSON.stringify({...s.style,_fc:s.style.textColor,_fo:s.style.textAlpha}));
-    if(hasKaraoke(s)){const kd=s.karaoke;getPenId(JSON.stringify({...s.style,_fc:kd.preColor||'#5046EC',_fo:kd.preAlpha!==undefined?kd.preAlpha:100}));}
+    if(hasKaraoke(s)){
+      const kd=s.karaoke;
+      const kPreKey=JSON.stringify({...s.style,_fc:kd.preColor||'#5046EC',_fo:kd.preAlpha!==undefined?kd.preAlpha:100});
+      getPenId(kPreKey);
+      // Pre-register color-interpolation pens needed by YTK Fade (preColor→mainColor)
+      if(kd.animation==='ytk-fade'){
+        const _ytkMain=s.style.textColor||'#ffffff';
+        const _ytkPre=kd.preColor||'#5046EC';
+        const _ytkAlpha=kd.preAlpha!==undefined?kd.preAlpha:100;
+        const _ytkSteps=kd.animSpeed||4;
+        for(let _k=1;_k<=_ytkSteps;_k++)getPenId(JSON.stringify({...s.style,_fc:_lerpHex(_ytkPre,_ytkMain,_k/_ytkSteps),_fo:_ytkAlpha}));
+      }
+      // Pre-register opacity pens needed by Reveal (invisible→mainColor)
+      if(kd.animation==='reveal'){
+        const _revSteps=kd.animSpeed||4;
+        getPenId(JSON.stringify({...s.style,_fc:s.style.textColor||'#ffffff',_fo:0}));
+        for(let _k=1;_k<=_revSteps;_k++){
+          getPenId(JSON.stringify({...s.style,_fc:s.style.textColor||'#ffffff',_fo:Math.round(_k/_revSteps*100)}));
+        }
+      }
+    }
     if(hasMirror(s)){
       const m=s.mirror;
       const opacityFrac=(m.opacity||40)/100;
@@ -858,9 +889,13 @@ buildYTT=function(sorted){
     const subDur=Math.max(1,s.endMs-s.startMs);
 
     // ── FadeWorks: character-wipe reveal/hide ──────────────────────────────────
-    if(s.fadeworks&&!hasKaraoke(s)){
+    if(s.fadeworks&&!s.shake&&!hasKaraoke(s)){
       const fw=s.fadeworks;
-      const chars=[...displayText];
+      const fwDir=fw.direction||'ltr';
+      const fwMode=fw.mode||'both';
+      const rawChars=[...displayText];
+      // RTL: reverse char array so the sweep direction flips visually
+      const chars=fwDir==='rtl'?rawChars.slice().reverse():rawChars;
       const nc=chars.length;
       if(nc===0){lines.push(`<p t="${s.startMs}" d="${subDur}" wp="${wpId}" ws="0"><s p="${mainPenId}"></s></p>`);return;}
       const FW_TRAIL=3,FW_FRAME=67;
@@ -877,7 +912,7 @@ buildYTT=function(sorted){
         const parts=[];
         const fe=Math.max(0,ci-FW_TRAIL);
         if(fe>0)parts.push(`<s p="${fwPens[4]}">${escX2(chars.slice(0,fe).join(''))}</s>`);
-        for(let i=0;i<FW_TRAIL;i++){const idx=ci-FW_TRAIL+i;if(idx>=0&&idx<nc)parts.push(`<s p="${fwPens[i+1]}">${escX2(chars[idx])}</s>`);}
+        for(let i=0;i<FW_TRAIL;i++){const idx=ci-FW_TRAIL+i;if(idx>=0&&idx<nc)parts.push(`<s p="${fwPens[FW_TRAIL-i]}">${escX2(chars[idx])}</s>`);}
         if(ci<nc)parts.push(`<s p="${fwPens[0]}">${escX2(chars.slice(ci).join(''))}</s>`);
         return parts;
       }
@@ -888,7 +923,9 @@ buildYTT=function(sorted){
         const fs=Math.min(nc,ci+FW_TRAIL);if(fs<nc)parts.push(`<s p="${fwPens[4]}">${escX2(chars.slice(fs).join(''))}</s>`);
         return parts;
       }
-      const fwIn=Math.max(0,fw.inMs||0),fwOut=Math.max(0,fw.outMs||0);
+      // mode controls which phases are active
+      const fwIn=fwMode==='out-only'?0:Math.max(0,fw.inMs||0);
+      const fwOut=fwMode==='in-only'?0:Math.max(0,fw.outMs||0);
       const fwHoldMs=Math.max(0,subDur-fwIn-fwOut);
       // Reveal phase
       if(fwIn>0){
@@ -901,7 +938,7 @@ buildYTT=function(sorted){
           t=fEnd;
         }
       }
-      // Hold phase
+      // Hold phase — always use displayText (original order) for the static frame
       const fwHoldStart=s.startMs+fwIn;
       if(fwHoldMs>0)lines.push(`<p t="${fwHoldStart}" d="${fwHoldMs}" wp="${wpId}" ws="0"><s p="${fwPens[4]}">${escX2(displayText)}</s></p>`);
       // Hide phase
@@ -985,12 +1022,97 @@ buildYTT=function(sorted){
       const segDur=Math.max(1,tEnd-tStart);
       const sungText=syls.slice(0,i+1).map(sv=>sv.text).join('');
       const unsungText=syls.slice(i+1).map(sv=>sv.text).join('');
-      if(i===syls.length-1&&fadeOut>0){
+      if(kd.animation==='ytk-fade'){
+        // YTK Fade: color-interpolation from preColor→mainColor in N×67ms steps (all full opacity)
+        const YTK_STEP_MS=67;
+        const _ytkMain=s.style.textColor||'#ffffff';
+        const _ytkPre=kd.preColor||'#5046EC';
+        const _ytkAlpha=kd.preAlpha!==undefined?kd.preAlpha:100;
+        const _ytkSteps=kd.animSpeed||4;
+        const N=Math.min(_ytkSteps,Math.floor(segDur/YTK_STEP_MS));
+        const preBeforeText=syls.slice(0,i).map(sv=>sv.text).join('');
+        const curSylText=syl.text;
+        let t2=tStart;
+        // Emit N interpolated-color frames for current syllable
+        for(let k=0;k<N;k++){
+          const c=_lerpHex(_ytkPre,_ytkMain,(k+1)/_ytkSteps);
+          const stepPenId=penIndex.get(JSON.stringify({...s.style,_fc:c,_fo:_ytkAlpha}))??mainPenId;
+          let html='';
+          if(preBeforeText)html+=`<s p="${mainPenId}">${escX2(preBeforeText)}</s>`;
+          html+=`<s p="${stepPenId}">${escX2(curSylText)}</s>`;
+          if(unsungText)html+=`<s p="${prePenId}">${escX2(unsungText)}</s>`;
+          lines.push(`<p t="${t2}" d="${YTK_STEP_MS}" wp="${wpId}" ws="0">${html}</p>`);
+          t2+=YTK_STEP_MS;
+        }
+        // Hold frame then optional fade-out for last syllable
+        if(i===syls.length-1&&fadeOut>0){
+          const fadeOutStart=Math.max(t2,s.endMs-fadeOut);
+          if(t2<fadeOutStart){
+            let html='';
+            if(sungText)html+=`<s p="${mainPenId}">${escX2(sungText)}</s>`;
+            if(unsungText)html+=`<s p="${prePenId}">${escX2(unsungText)}</s>`;
+            if(html)lines.push(`<p t="${t2}" d="${Math.max(1,fadeOutStart-t2)}" wp="${wpId}" ws="0">${html}</p>`);
+          }
+          let tf=fadeOutStart;
+          for(const step of buildFadeSteps(fadeOut,'out')){
+            if(tf+step.ms>s.endMs)break;
+            const fpid=getFadePenId(mainKey,step.fo);
+            lines.push(`<p t="${tf}" d="${step.ms}" wp="${wpId}" ws="0"><s p="${fpid}">${escX2(sungText)}</s></p>`);
+            tf+=step.ms;
+          }
+        } else if(t2<tEnd){
+          let html='';
+          if(sungText)html+=`<s p="${mainPenId}">${escX2(sungText)}</s>`;
+          if(unsungText)html+=`<s p="${prePenId}">${escX2(unsungText)}</s>`;
+          if(html)lines.push(`<p t="${t2}" d="${Math.max(1,tEnd-t2)}" wp="${wpId}" ws="0">${html}</p>`);
+        }
+      } else if(kd.animation==='reveal'){
+        // Reveal: invisible until karaoke reaches syllable, then opacity fades in
+        const REV_STEP_MS=67;
+        const _revSteps=kd.animSpeed||4;
+        const invKey=JSON.stringify({...s.style,_fc:s.style.textColor||'#ffffff',_fo:0});
+        const invPenId=penIndex.get(invKey)??0;
+        const preBeforeText=syls.slice(0,i).map(sv=>sv.text).join('');
+        const curSylText=syl.text;
+        const N=Math.min(_revSteps,Math.floor(segDur/REV_STEP_MS));
+        let t2=tStart;
+        for(let k=0;k<N;k++){
+          const fo=Math.round((k+1)/_revSteps*100);
+          const stepKey=JSON.stringify({...s.style,_fc:s.style.textColor||'#ffffff',_fo:fo});
+          const stepPenId=penIndex.get(stepKey)??mainPenId;
+          let html='';
+          if(preBeforeText)html+=`<s p="${mainPenId}">${escX2(preBeforeText)}</s>`;
+          html+=`<s p="${stepPenId}">${escX2(curSylText)}</s>`;
+          if(unsungText)html+=`<s p="${invPenId}">${escX2(unsungText)}</s>`;
+          lines.push(`<p t="${t2}" d="${REV_STEP_MS}" wp="${wpId}" ws="0">${html}</p>`);
+          t2+=REV_STEP_MS;
+        }
+        if(i===syls.length-1&&fadeOut>0){
+          const fadeOutStart=Math.max(t2,s.endMs-fadeOut);
+          if(t2<fadeOutStart){
+            let html='';
+            if(sungText)html+=`<s p="${mainPenId}">${escX2(sungText)}</s>`;
+            if(html)lines.push(`<p t="${t2}" d="${Math.max(1,fadeOutStart-t2)}" wp="${wpId}" ws="0">${html}</p>`);
+          }
+          let tf=fadeOutStart;
+          for(const step of buildFadeSteps(fadeOut,'out')){
+            if(tf+step.ms>s.endMs)break;
+            const fpid=getFadePenId(mainKey,step.fo);
+            lines.push(`<p t="${tf}" d="${step.ms}" wp="${wpId}" ws="0"><s p="${fpid}">${escX2(sungText)}</s></p>`);
+            tf+=step.ms;
+          }
+        } else if(t2<tEnd){
+          let html='';
+          if(sungText)html+=`<s p="${mainPenId}">${escX2(sungText)}</s>`;
+          if(unsungText)html+=`<s p="${invPenId}">${escX2(unsungText)}</s>`;
+          if(html)lines.push(`<p t="${t2}" d="${Math.max(1,tEnd-t2)}" wp="${wpId}" ws="0">${html}</p>`);
+        }
+      } else if(i===syls.length-1&&fadeOut>0){
         // Last syllable — emit main portion then fade out
         const mainText=sungText;
         const fadeOutStart=Math.max(tStart,s.endMs-fadeOut);
         const mainD=Math.max(1,fadeOutStart-tStart);
-        lines.push(`<p t="${tStart}" d="${mainD}" wp="${wpId}" ws="0"><s p="${prePenId}">${escX2(mainText)}</s></p>`);
+        lines.push(`<p t="${tStart}" d="${mainD}" wp="${wpId}" ws="0"><s p="${mainPenId}">${escX2(mainText)}</s></p>`);
         let t=fadeOutStart;
         const kFadeOutSteps=buildFadeSteps(fadeOut,'out');
         for(const step of kFadeOutSteps){
@@ -1000,8 +1122,9 @@ buildYTT=function(sorted){
           t+=step.ms;
         }
       } else {
-        if(sungText&&unsungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${wpId}" ws="0"><s p="${prePenId}">${escX2(sungText)}</s><s p="${mainPenId}">${escX2(unsungText)}</s></p>`);
-        else if(sungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${wpId}" ws="0"><s p="${prePenId}">${escX2(sungText)}</s></p>`);
+        // preColor = unsunk (pre-karaoke) color, mainColor = sung (post-karaoke) color
+        if(sungText&&unsungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${wpId}" ws="0"><s p="${mainPenId}">${escX2(sungText)}</s><s p="${prePenId}">${escX2(unsungText)}</s></p>`);
+        else if(sungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${wpId}" ws="0"><s p="${mainPenId}">${escX2(sungText)}</s></p>`);
       }
       cumMs+=syl.durMs;
     });
@@ -1220,8 +1343,8 @@ buildYTT=function(sorted){
           const sungText=syls.slice(0,i+1).map(sv=>sv.text).join('');
           const unsungText=syls.slice(i+1).map(sv=>sv.text).join('');
           if(tStart<mirKFadeOutStart){
-            if(sungText&&unsungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPrePenId}">${escX2(sungText)}</s><s p="${ghostPenId}">${escX2(unsungText)}</s></p>`);
-            else if(sungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPrePenId}">${escX2(sungText)}</s></p>`);
+            if(sungText&&unsungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(sungText)}</s><s p="${ghostPrePenId}">${escX2(unsungText)}</s></p>`);
+            else if(sungText)lines.push(`<p t="${tStart}" d="${segDur}" wp="${ghostWpId}" ws="0"><s p="${ghostPenId}">${escX2(sungText)}</s></p>`);
           }
           cumMs+=syl.durMs;
         });

@@ -13,6 +13,7 @@ const KB_DEFAULTS=[
   {id:'delete',    label:'Delete Block',         desc:'Delete selected block',         def:'delete'},
   {id:'snap',      label:'Toggle Snap',          desc:'Toggle snap to grid',           def:'s'},
   {id:'magnet',    label:'Toggle Magnet',        desc:'Toggle magnet to edges',        def:'m'},
+  {id:'drag-tool', label:'Toggle Drag Tool',     desc:'Drag subtitles to reposition on preview', def:'d'},
   {id:'undo',      label:'Undo',                 desc:'Undo last action',              def:'ctrl+z'},
   {id:'redo',      label:'Redo',                 desc:'Redo last undone action',       def:'ctrl+y'},
   {id:'next-block',label:'Next Block',           desc:'Select next subtitle',          def:'tab'},
@@ -64,7 +65,7 @@ function updateTooltipKeys(){
   const map={
     'play':'tip-play-key','skip-back':'tip-skip-back-key','skip-fwd':'tip-skip-fwd-key',
     'loop-block':'tip-loop-key',
-    'snap':'tip-snap-key','magnet':'tip-magnet-key','add':'tip-add-key',
+    'snap':'tip-snap-key','magnet':'tip-magnet-key','drag-tool':'tip-drag-key','add':'tip-add-key',
     'undo':'tip-undo-key','redo':'tip-redo-key',
   };
   // Write values into hidden <span> elements that the tooltip engine reads
@@ -110,7 +111,7 @@ function renderKbModal(){
   const sections=[
     {title:'Playback',ids:['play','skip-back','skip-fwd','loop-block']},
     {title:'Editing',ids:['set-in','set-out','add','delete','undo','redo']},
-    {title:'Timeline',ids:['snap','magnet','next-block','prev-block']},
+    {title:'Timeline',ids:['snap','magnet','drag-tool','next-block','prev-block']},
     {title:'App',ids:['shortcuts']},
   ];
   sections.forEach(sec=>{
@@ -181,7 +182,8 @@ function onKey(e){
   else if(matches('add')){e.preventDefault();addSubtitle();}
   else if(matches('snap')){e.preventDefault();toggleSnap();}
   else if(matches('magnet')){e.preventDefault();toggleMagnet();}
-  else if(matches('delete')||k==='backspace'){if(selId){e.preventDefault();deleteSel();}}
+  else if(matches('drag-tool')){e.preventDefault();toggleDragTool();}
+  else if(matches('delete')||k==='backspace'){if(selId||multi.size>0){e.preventDefault();deleteSel();}}
   else if(matches('shortcuts')){e.preventDefault();openKbModal();}
   else if(matches('next-block')||matches('prev-block')){
     e.preventDefault();

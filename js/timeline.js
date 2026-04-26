@@ -58,7 +58,7 @@ let dragGhost=null;
 function blockMouseDown(e,id){
   const s=subs.find(x=>x.id===id);if(!s)return;
   // Immediately select on mousedown so inspector shows instantly
-  if(!e.shiftKey){multi.clear();selId=id;}
+  if(!e.shiftKey){if(!multi.has(id))multi.clear();selId=id;}
   else{multi.has(id)?multi.delete(id):multi.add(id);selId=id;}
   renderBlocks();renderSL();updInsp();
   // Snapshot BEFORE drag starts so we can restore pre-drag state

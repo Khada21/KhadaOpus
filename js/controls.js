@@ -95,6 +95,7 @@ function applySnapMagnet(ms,subId,side){
           const newW=Math.max(200,Math.min(700,startW+(startX-latestX)));
           rightCol.style.width=newW+'px';
           leftPane.style.width=(totalW-newW-4)+'px';
+          if(typeof moveEditId!=='undefined'&&moveEditId&&typeof mvDrawOverlay==='function')mvDrawOverlay();
         });
       }
       function onUp(){
@@ -170,6 +171,7 @@ function applySnapMagnet(ms,subId,side){
           raf=null;
           const newH=Math.max(80,Math.min(paneH-120,startH+(latestY-startY)));
           videoArea.style.height=newH+'px';
+          if(typeof moveEditId!=='undefined'&&moveEditId&&typeof mvDrawOverlay==='function')mvDrawOverlay();
         });
       }
       function onUp(){
