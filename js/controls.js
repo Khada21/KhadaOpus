@@ -6,12 +6,29 @@ function toggleMagnet(){
   magnetEnabled=!magnetEnabled;
   document.getElementById('btn-magnet').classList.toggle('active',magnetEnabled);
 }
+function toggleFrameSnap(){
+  frameSnapEnabled=!frameSnapEnabled;
+  const btn=document.getElementById('btn-frame-snap');
+  const sel=document.getElementById('frame-fps-sel');
+  if(btn)btn.classList.toggle('active',frameSnapEnabled);
+  if(sel)sel.style.opacity=frameSnapEnabled?'1':'0.4';
+}
+function setFrameSnapFps(fps){
+  frameSnapFps=+fps||30;
+}
 
 // Apply snap + magnet to a millisecond value during drag
 // side: 'start' or 'end', subId: current sub being dragged
 function applySnapMagnet(ms,subId,side){
   const SNAP_MS=1000; // snap to nearest second
   const MAG_THRESH=Math.max(80,(80/pxS)*1000); // ~80px in ms
+
+  // Frame snap runs first — highest precision, overridden by magnet if closer
+  if(frameSnapEnabled){
+    const frameDurMs=1000/Math.max(1,frameSnapFps);
+    const snapped=Math.round(ms/frameDurMs)*frameDurMs;
+    if(Math.abs(snapped-ms)<MAG_THRESH)ms=snapped;
+  }
 
   if(snapEnabled){
     const snapped=Math.round(ms/SNAP_MS)*SNAP_MS;

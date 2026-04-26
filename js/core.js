@@ -2,7 +2,7 @@
 // ═══════════════ STATE ════════════════
 const DS={bold:false,italic:false,underline:false,font:'Roboto',fontSize:100,textColor:'#ffffff',textAlpha:100,bgColor:'#000000',bgAlpha:60,position:2,customX:null,customY:null,shadowGlow:false,shadowBevel:false,shadowSoft:false,shadowHard:false,outlineColor:'#000000',outlineAlpha:0,outlineType:0,outlineSize:3};
 let subs=[],tracks=[0],selId=null,multi=new Set(),player=null,playing=false,dur=180000,curMs=0,pxS=80,raf=null,drag=null;
-let snapEnabled=true,magnetEnabled=true;
+let snapEnabled=true,magnetEnabled=true,frameSnapEnabled=false,frameSnapFps=30;
 
 // ── Undo / Redo ──
 // Each stack entry is a JSON string of the full subs+tracks state (deep copy)

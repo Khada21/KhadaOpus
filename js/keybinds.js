@@ -13,6 +13,7 @@ const KB_DEFAULTS=[
   {id:'delete',    label:'Delete Block',         desc:'Delete selected block',         def:'delete'},
   {id:'snap',      label:'Toggle Snap',          desc:'Toggle snap to grid',           def:'s'},
   {id:'magnet',    label:'Toggle Magnet',        desc:'Toggle magnet to edges',        def:'m'},
+  {id:'frame-snap',label:'Toggle Frame Snap',     desc:'Snap block edges to exact video frame boundaries', def:'f'},
   {id:'drag-tool', label:'Toggle Drag Tool',     desc:'Drag subtitles to reposition on preview', def:'d'},
   {id:'undo',      label:'Undo',                 desc:'Undo last action',              def:'ctrl+z'},
   {id:'redo',      label:'Redo',                 desc:'Redo last undone action',       def:'ctrl+y'},
@@ -65,7 +66,7 @@ function updateTooltipKeys(){
   const map={
     'play':'tip-play-key','skip-back':'tip-skip-back-key','skip-fwd':'tip-skip-fwd-key',
     'loop-block':'tip-loop-key',
-    'snap':'tip-snap-key','magnet':'tip-magnet-key','drag-tool':'tip-drag-key','add':'tip-add-key',
+    'snap':'tip-snap-key','magnet':'tip-magnet-key','frame-snap':'tip-frame-snap-key','drag-tool':'tip-drag-key','add':'tip-add-key',
     'undo':'tip-undo-key','redo':'tip-redo-key',
   };
   // Write values into hidden <span> elements that the tooltip engine reads
@@ -182,6 +183,7 @@ function onKey(e){
   else if(matches('add')){e.preventDefault();addSubtitle();}
   else if(matches('snap')){e.preventDefault();toggleSnap();}
   else if(matches('magnet')){e.preventDefault();toggleMagnet();}
+  else if(matches('frame-snap')){e.preventDefault();toggleFrameSnap();}
   else if(matches('drag-tool')){e.preventDefault();toggleDragTool();}
   else if(matches('delete')||k==='backspace'){if(selId||multi.size>0){e.preventDefault();deleteSel();}}
   else if(matches('shortcuts')){e.preventDefault();openKbModal();}

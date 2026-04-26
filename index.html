@@ -258,6 +258,19 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 15A6 6 0 1 0 18 15"/><path d="M6 15v3a2 2 0 0 0 4 0v-3"/><path d="M14 15v3a2 2 0 0 0 4 0v-3"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/></svg>
             Magnet
           </button>
+          <button class="tl-tbtn snap-btn" id="btn-frame-snap" onclick="toggleFrameSnap()" data-tip="Snap block edges to video frame boundaries" data-tipkey-id="tip-frame-snap-key">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="1"/><line x1="7" y1="5" x2="7" y2="19"/><line x1="17" y1="5" x2="17" y2="19"/><line x1="2" y1="9" x2="7" y2="9"/><line x1="2" y1="15" x2="7" y2="15"/><line x1="17" y1="9" x2="22" y2="9"/><line x1="17" y1="15" x2="22" y2="15"/></svg>
+            Frame
+          </button>
+          <select id="frame-fps-sel" onchange="setFrameSnapFps(this.value)" class="frame-fps-sel" title="Frame rate (fps)" style="opacity:.4">
+            <option value="23.976">23.97</option>
+            <option value="24">24</option>
+            <option value="25">25</option>
+            <option value="29.97">29.97</option>
+            <option value="30" selected>30 fps</option>
+            <option value="50">50</option>
+            <option value="60">60</option>
+          </select>
           <button class="tl-tbtn snap-btn" id="btn-drag-tool" onclick="toggleDragTool()" data-tip="Drag subtitles to reposition on video" data-tipkey-id="tip-drag-key">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
             Drag
