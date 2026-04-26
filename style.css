@@ -438,12 +438,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 /* Syllable word row below waveform – like Aegisub bottom strip */
 .ke-syl-row{height:34px;flex-shrink:0;background:#111114;border-bottom:1px solid var(--border);position:relative;z-index:5;user-select:none}
-.ke-syl-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;overflow:hidden;cursor:pointer;user-select:none;box-sizing:border-box;}
+.ke-syl-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;overflow:hidden;cursor:crosshair;user-select:none;box-sizing:border-box;pointer-events:none}
 .ke-syl-seg.sel{outline:2px solid #fff;outline-offset:-2px;z-index:2}
 .ke-syl-seg.multi-sel{outline:2px dashed rgba(255,255,255,0.55);outline-offset:-2px;z-index:1}
 /* Edge handles sit ON TOP of the row, positioned at each syllable boundary */
 .ke-syl-edge{position:absolute;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:20;transform:translateX(-50%);background:transparent;transition:background .1s}
 .ke-syl-edge:hover,.ke-syl-edge.dragging{background:rgba(255,255,255,0.25)}
+/* Split indicator — vertical cut line shown on hover in the syllable strip */
+.ke-split-ind{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,80,80,.9);pointer-events:none;z-index:15;transform:translateX(-50%);display:none}
+.ke-split-tip{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:rgba(10,10,18,.95);border:1px solid rgba(255,80,80,.55);color:#fff;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:3px;white-space:nowrap;z-index:50;letter-spacing:.3px}
 /* Time tooltip shown while dragging a boundary */
 #ke-drag-tooltip{position:fixed;background:#000;color:#0f0;font-family:var(--mono);font-size:11px;padding:3px 8px;border:1px solid #333;border-radius:3px;pointer-events:none;z-index:9999;display:none;white-space:nowrap;transform:translate(-50%,-130%)}
 

@@ -95,6 +95,7 @@ function _karaSelAdjacent(){
 
 // Split syllable at sylIdx proportionally at frac (0..1)
 function _karaSplitAtPos(sylIdx,frac){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   const syl=syls[sylIdx];if(!syl)return;
@@ -114,6 +115,7 @@ function _karaSplitAtPos(sylIdx,frac){
 
 // Split each selected syllable by words
 function _karaSplitSelByWords(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   const sorted=[...karaSelSyls].sort((a,b)=>b-a); // reverse so indices stay valid
@@ -133,6 +135,7 @@ function _karaSplitSelByWords(){
 
 // Split each selected syllable by letters
 function _karaSplitSelByLetters(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   const sorted=[...karaSelSyls].sort((a,b)=>b-a);
@@ -155,6 +158,7 @@ function _karaSplitSelByLetters(){
 
 // Delete all selected syllables (distributes duration to last remaining)
 function _karaDelMultiSel(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   if(syls.length<=karaSelSyls.size)return;
@@ -288,6 +292,9 @@ function closeKaraEditor(){
   const karaH=karaEd?karaEd.offsetHeight:0;
   karaEditId=null;karaSelSyl=null;karaSelSyls=new Set();karaCursorX=null;
   if(karaSylTimer){clearTimeout(karaSylTimer);karaSylTimer=null;playing=false;document.getElementById('play-icon').textContent='▶';}
+  // Clean up syl-strip event listeners
+  const row=document.getElementById('ke-syl-row');
+  if(row&&row._karaAC){row._karaAC.abort();row._karaAC=null;}
   hideDragTooltip();
   if(karaEd)karaEd.style.display='none';
   insp.style.display='flex';
@@ -427,6 +434,12 @@ function reDrawKaraWave(){
 // ── Build syllable word strip (draggable boundaries) ──
 function buildSylStrip(){
   const row=document.getElementById('ke-syl-row');if(!row)return;
+
+  // Abort previous container-level listeners cleanly
+  if(row._karaAC){row._karaAC.abort();}
+  row._karaAC=new AbortController();
+  const sig=row._karaAC.signal;
+
   row.innerHTML='';
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
@@ -434,7 +447,7 @@ function buildSylStrip(){
   const totalMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
   const pc=(sub.karaoke&&sub.karaoke.preColor)||'#5046EC';
 
-  // 1. Draw syllable segments
+  // 1. Draw syllable segments — pointer-events:none (CSS), interaction handled by container
   let leftPct=0;
   syls.forEach((syl,i)=>{
     const widthPct=(syl.durMs/totalMs)*100;
@@ -451,26 +464,11 @@ function buildSylStrip(){
     seg.dataset.idx=i;
     seg.textContent=syl.text.trimEnd()||'·';
     seg.title=syl.text.trimEnd()+' · '+syl.durMs+'ms';
-    seg.addEventListener('mousedown',e=>{
-      e.preventDefault();e.stopPropagation();
-      if(e.shiftKey&&karaSelSyl!==null){
-        // Range select from karaSelSyl to i
-        const lo=Math.min(karaSelSyl,i),hi=Math.max(karaSelSyl,i);
-        const newSet=new Set();
-        for(let j=lo;j<=hi;j++)newSet.add(j);
-        karaSelSyls=newSet;
-        karaSelSyl=i;
-      } else {
-        karaSelSyl=i;karaSelSyls=new Set([i]);
-      }
-      buildSylStrip();reDrawKaraWave();updKaraSelEdit();
-    });
-    seg.addEventListener('contextmenu',e=>_showKaraSylCtxMenu(e,i));
     row.appendChild(seg);
     leftPct+=widthPct;
   });
 
-  // 2. Draw edge handles at each internal boundary
+  // 2. Draw edge handles at each internal boundary (pointer-events:auto via CSS z-index:20)
   let edgePct=0;
   syls.forEach((syl,i)=>{
     edgePct+=(syl.durMs/totalMs)*100;
@@ -483,6 +481,96 @@ function buildSylStrip(){
       row.appendChild(edge);
     }
   });
+
+  // 3. Split indicator line + snap tooltip (always last child, pointer-events:none)
+  const ind=document.createElement('div');
+  ind.className='ke-split-ind';
+  const tip=document.createElement('div');
+  tip.className='ke-split-tip';
+  ind.appendChild(tip);
+  row.appendChild(ind);
+
+  // 4. Container-level cut interaction
+  // Helper: get syllable at pixel x, given row width W
+  function _sylAtX(x,W){
+    let px=0;
+    for(let i=0;i<syls.length;i++){
+      const w=(syls[i].durMs/totalMs)*W;
+      if(x>=px&&x<px+w)return{idx:i,startPx:px,width:w};
+      px+=w;
+    }
+    return null;
+  }
+
+  let _hoverIdx=null,_hoverFrac=null;
+
+  row.addEventListener('mousemove',e=>{
+    // Don't show indicator when hovering over a boundary edge handle
+    if(e.target.classList.contains('ke-syl-edge')){
+      ind.style.display='none';_hoverIdx=null;_hoverFrac=null;return;
+    }
+    const rect=row.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const W=rect.width||300;
+    const hit=_sylAtX(x,W);
+    const syl=hit?syls[hit.idx]:null;
+    if(hit&&syl.text.length>1&&syl.durMs>=100){
+      // Snap to nearest character boundary position
+      const N=syl.text.length;
+      let snapChar=1,minDist=Infinity;
+      for(let c=1;c<N;c++){
+        const bx=hit.startPx+(c/N)*hit.width;
+        const d=Math.abs(x-bx);
+        if(d<minDist){minDist=d;snapChar=c;}
+      }
+      const snapX=hit.startPx+(snapChar/N)*hit.width;
+      _hoverIdx=hit.idx;
+      _hoverFrac=snapChar/N;
+      ind.style.left=snapX+'px';
+      ind.style.display='block';
+      // Show split preview in tooltip
+      tip.textContent=syl.text.slice(0,snapChar)+' | '+syl.text.slice(snapChar);
+    } else {
+      ind.style.display='none';_hoverIdx=null;_hoverFrac=null;
+    }
+  },{signal:sig});
+
+  row.addEventListener('mouseleave',()=>{
+    ind.style.display='none';_hoverIdx=null;_hoverFrac=null;
+  },{signal:sig});
+
+  // Right-click: context menu (identify syllable from position)
+  row.addEventListener('contextmenu',e=>{
+    if(e.target.classList.contains('ke-syl-edge'))return;
+    const rect=row.getBoundingClientRect();
+    const hit=_sylAtX(e.clientX-rect.left,rect.width||300);
+    if(hit)_showKaraSylCtxMenu(e,hit.idx);
+  },{signal:sig});
+
+  // Click: split at indicator position; shift+click = range select
+  row.addEventListener('click',e=>{
+    if(e.target.classList.contains('ke-syl-edge'))return;
+    if(e.shiftKey){
+      // Shift+click = range select (find syllable at click x)
+      const rect=row.getBoundingClientRect();
+      const hit=_sylAtX(e.clientX-rect.left,rect.width||300);
+      if(hit!==null&&karaSelSyl!==null){
+        const lo=Math.min(karaSelSyl,hit.idx),hi=Math.max(karaSelSyl,hit.idx);
+        const ns=new Set();for(let j=lo;j<=hi;j++)ns.add(j);
+        karaSelSyls=ns;karaSelSyl=hit.idx;
+        buildSylStrip();reDrawKaraWave();updKaraSelEdit();
+      } else if(hit!==null){
+        karaSelSyl=hit.idx;karaSelSyls=new Set([hit.idx]);
+        buildSylStrip();reDrawKaraWave();updKaraSelEdit();
+      }
+      return;
+    }
+    // Normal click = split at indicator
+    if(_hoverIdx!==null&&_hoverFrac!==null){
+      _karaSplitAtPos(_hoverIdx,_hoverFrac);
+    }
+  },{signal:sig});
+
   updKaraSelEdit();
 }
 
@@ -501,6 +589,7 @@ function hideDragTooltip(){
 
 function startSylBoundaryDrag(e,i,edgeEl){
   e.preventDefault();e.stopPropagation();
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   const origA=syls[i].durMs,origB=syls[i+1].durMs,combined=origA+origB;
@@ -551,7 +640,7 @@ function startSylBoundaryDrag(e,i,edgeEl){
   document.addEventListener('mouseup',onUp);
 }
 
-// Canvas interaction: drag boundary near handles, or click to SPLIT syllable at position
+// Canvas interaction: drag boundary handles only (splitting moved to syl strip below)
 (function initWaveInteraction(){
   const SNAP_PX=10;
 
@@ -565,18 +654,6 @@ function startSylBoundaryDrag(e,i,edgeEl){
       result.push({x:px,i});
     }
     return result;
-  }
-
-  function getSylAtX(sub,x,W){
-    const syls=sub.karaoke.syllables;
-    const totalMs=syls.reduce((a,s)=>a+s.durMs,0)||1;
-    let px=0;
-    for(let i=0;i<syls.length;i++){
-      const w=(syls[i].durMs/totalMs)*W;
-      if(x<px+w)return{syl:syls[i],idx:i,startPx:px,width:w};
-      px+=w;
-    }
-    return null;
   }
 
   function setup(){
@@ -600,6 +677,7 @@ function startSylBoundaryDrag(e,i,edgeEl){
       if(nearBoundary!==null){
         // ── Drag boundary ──
         e.preventDefault();
+        snapshot();
         const i=nearBoundary.i;
         const origA=syls[i].durMs,origB=syls[i+1].durMs,combined=origA+origB;
         const startX=e.clientX;
@@ -639,19 +717,10 @@ function startSylBoundaryDrag(e,i,edgeEl){
         }
         document.addEventListener('mousemove',onMove);
         document.addEventListener('mouseup',onUp);
-
-      } else {
-        // ── Click on syllable body → split at that position ──
-        e.preventDefault();
-        const hit=getSylAtX(sub,x,W);
-        if(hit){
-          const frac=(x-hit.startPx)/Math.max(1,hit.width);
-          _karaSplitAtPos(hit.idx,frac);
-        }
       }
     });
 
-    // Cursor: ew-resize near boundary, crosshair inside splittable syllable, pointer otherwise
+    // Cursor: ew-resize near boundary, default otherwise (splitting is now syl-strip only)
     wrap.addEventListener('mousemove',e=>{
       if(!karaEditId)return;
       const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
@@ -659,12 +728,7 @@ function startSylBoundaryDrag(e,i,edgeEl){
       const W=rect.width||300;
       const x=e.clientX-rect.left;
       const boundaries=getBoundaryData(sub,W);
-      if(boundaries.some(b=>Math.abs(x-b.x)<=SNAP_PX)){
-        wrap.style.cursor='ew-resize';
-      } else {
-        const hit=getSylAtX(sub,x,W);
-        wrap.style.cursor=(hit&&hit.syl.text.length>1&&hit.syl.durMs>=100)?'crosshair':'pointer';
-      }
+      wrap.style.cursor=boundaries.some(b=>Math.abs(x-b.x)<=SNAP_PX)?'ew-resize':'default';
     });
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
@@ -716,6 +780,7 @@ function updKaraSelEdit(){
 // ── Toolbar actions ──
 function karaSplitAtCursor(){
   // Split selected syllable in half
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke||karaSelSyl===null)return;
   const syls=sub.karaoke.syllables,syl=syls[karaSelSyl];
   if(!syl||syl.durMs<100||syl.text.length<=1)return;
@@ -725,6 +790,7 @@ function karaSplitAtCursor(){
   buildSylStrip();reDrawKaraWave();
 }
 function karaJoinSel(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   const syls=sub.karaoke.syllables;
   // Multi-select join (all adjacent)
@@ -745,6 +811,7 @@ function karaJoinSel(){
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();
 }
 function karaDelSel(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke||karaSelSyl===null)return;
   const syls=sub.karaoke.syllables;if(syls.length<=1)return;
   const dur=syls[karaSelSyl].durMs;syls.splice(karaSelSyl,1);
@@ -753,6 +820,7 @@ function karaDelSel(){
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();
 }
 function karaAutoSplit(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
   sub.karaoke.syllables=_splitIntoWordSyllables(sub.text,totalMs);
@@ -760,6 +828,7 @@ function karaAutoSplit(){
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();renderBlocks();renderSL();
 }
 function karaAutoSplitChars(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub)return;
   const totalMs=sub.endMs-sub.startMs;
   const raw=[...sub.text];
@@ -775,6 +844,7 @@ function karaAutoSplitChars(){
   buildSylStrip();reDrawKaraWave();updKaraSelEdit();renderBlocks();renderSL();
 }
 function karaAddSyl(){
+  snapshot();
   const sub=subs.find(s=>s.id===karaEditId);if(!sub||!sub.karaoke)return;
   sub.karaoke.syllables.push({text:'?',durMs:200});
   karaSelSyl=sub.karaoke.syllables.length-1;
@@ -817,6 +887,21 @@ function karaSylUpd(key,val){
 }
 
 window.addEventListener('resize',()=>{if(karaEditId){reDrawKaraWave();buildSylStrip();}});
+
+// ── Refresh karaoke editor after undo/redo ──
+const _origApplyState=applyState;
+applyState=function(stateStr){
+  _origApplyState.call(this,stateStr);
+  if(karaEditId){
+    const sub=subs.find(s=>s.id===karaEditId);
+    if(sub&&hasKaraoke(sub)){
+      karaSelSyl=null;karaSelSyls=new Set();
+      requestAnimationFrame(()=>{buildSylStrip();reDrawKaraWave();updKaraSelEdit();});
+    } else {
+      closeKaraEditor();
+    }
+  }
+};
 
 // ── Patch renderSL to show K badge ──
 const _origRenderSL=renderSL;

@@ -474,16 +474,11 @@ function init(v){
 function mkSub(s,e,t,tr,ov){return{id:uid(),startMs:s,endMs:e,text:t,track:tr,style:{...DS,...ov}};}
 function loadDemos(){
   subs=[
-    mkSub(1200,4500,'Welcome to this video.',0,{bold:true,textColor:'#ffe066',bgAlpha:70}),
-    mkSub(5000,8500,'Today we\'re talking about subtitle editing.',0,{}),
-    mkSub(9000,13000,'No software needed — just your browser.',0,{italic:true}),
-    mkSub(13500,17000,'Let\'s get right into it.',0,{}),
-    mkSub(17500,22000,'Here\'s where it gets interesting.',0,{shadowGlow:true,textColor:'#00e5ff'}),
-    mkSub(22500,27000,'Style each subtitle independently.',0,{}),
-    mkSub(5000,9000,'♪ Music playing ♪',1,{italic:true,textColor:'#aaaaaa',position:7,bgAlpha:35}),
-    mkSub(28000,33000,'Export as .ytt for full styling support.',0,{bold:true,shadowGlow:true}),
+    mkSub(500,4000,'Welcome to Khada Opus ✧',0,{bold:true,textColor:'#ffe066',bgAlpha:70}),
+    mkSub(4500,9500,'Press the ? button in the top-right corner to read the full guide.',0,{italic:true}),
+    mkSub(10000,15000,'Any .ytt file exported from this site can be re-imported to continue editing.',0,{textColor:'#80e5ff'}),
   ];
-  tracks=[0,1];
+  tracks=[0];
 }
 
 
