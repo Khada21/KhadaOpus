@@ -465,6 +465,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 /* MIRROR EFFECT */
 .blk-mir{height:13px;width:22px;background:transparent;color:var(--purple);border:1px solid var(--purple);padding:0 2px;}
 .blk-mir:hover,.blk-mir.active{background:var(--purple);color:#fff}
+
+/* ADJUST EFFECT */
+.blk-adj{height:13px;width:18px;background:transparent;color:#5ac8fa;border:1px solid #5ac8fa;padding:0 2px;}
+.blk-adj:hover,.blk-adj.active{background:#5ac8fa;color:#000}
 .mir-axis-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);cursor:pointer;border-radius:3px;transition:all .15s;font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 .mir-axis-btn:hover{border-color:var(--purple);color:var(--purple)}
 .mir-axis-btn.active{background:rgba(191,90,242,.15);border-color:var(--purple);color:var(--purple)}

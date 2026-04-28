@@ -19,6 +19,8 @@ const KB_DEFAULTS=[
   {id:'redo',      label:'Redo',                 desc:'Redo last undone action',       def:'ctrl+y'},
   {id:'next-block',label:'Next Block',           desc:'Select next subtitle',          def:'tab'},
   {id:'prev-block',label:'Previous Block',       desc:'Select previous subtitle',      def:'shift+tab'},
+  {id:'frame-back',    label:'Step Back 1 Frame',    desc:'Move playhead back one video frame',  def:'1'},
+  {id:'frame-fwd',     label:'Step Forward 1 Frame', desc:'Move playhead forward one video frame',def:'2'},
   {id:'shortcuts',     label:'Show Shortcuts',       desc:'Open this shortcuts panel',          def:'?'},
   {id:'reset-layout',  label:'Reset Layout',         desc:'Reset all panel sizes to default',   def:'`'},
 ];
@@ -113,7 +115,7 @@ function renderKbModal(){
   const sections=[
     {title:'Playback',ids:['play','skip-back','skip-fwd','loop-block']},
     {title:'Editing',ids:['set-in','set-out','add','delete','undo','redo']},
-    {title:'Timeline',ids:['snap','magnet','frame-snap','drag-tool','next-block','prev-block']},
+    {title:'Timeline',ids:['frame-back','frame-fwd','snap','magnet','frame-snap','drag-tool','next-block','prev-block']},
     {title:'App',ids:['shortcuts','reset-layout']},
   ];
   sections.forEach(sec=>{
@@ -177,6 +179,8 @@ function onKey(e){
   }
   else if(matches('skip-back')){e.preventDefault();skipTime(-5);}
   else if(matches('skip-fwd')){e.preventDefault();skipTime(5);}
+  else if(matches('frame-back')){e.preventDefault();const fps=typeof _previewFps!=='undefined'?_previewFps:30;seekTo(Math.max(0,curMs-1000/fps));}
+  else if(matches('frame-fwd')){e.preventDefault();const fps=typeof _previewFps!=='undefined'?_previewFps:30;seekTo(Math.min(dur,curMs+1000/fps));}
   else if(matches('undo')){e.preventDefault();doUndo();}
   else if(matches('redo')){e.preventDefault();doRedo();}
   else if(matches('set-in'))setIn();

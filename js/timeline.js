@@ -328,14 +328,24 @@ function fitPxS(){
   const w=sc.clientWidth||800;
   return w/(Math.max(dur,60000)/1000);
 }
-function zoomIn(){pxS=Math.min(pxS*1.5,400);syncZ();renderTL();_refreshWave();}
-function zoomOut(){pxS=Math.max(pxS/1.5,fitPxS());syncZ();renderTL();_refreshWave();}
+function _zoomPreserveCenter(newPxS){
+  const sc=document.getElementById('tl-scroll');
+  const centerMs=sc?(sc.scrollLeft+sc.clientWidth/2)/pxS*1000:curMs;
+  pxS=newPxS;
+  renderTL();_refreshWave();
+  if(sc)requestAnimationFrame(()=>{sc.scrollLeft=Math.max(0,centerMs/1000*pxS-sc.clientWidth/2);});
+}
+function zoomIn(){_zoomPreserveCenter(Math.min(pxS*1.5,400));syncZ();}
+function zoomOut(){_zoomPreserveCenter(Math.max(pxS/1.5,fitPxS()));syncZ();}
 function handleZoom(v){
   const minPx=fitPxS();
+  const sc=document.getElementById('tl-scroll');
+  const centerMs=sc?(sc.scrollLeft+sc.clientWidth/2)/pxS*1000:curMs;
   pxS=minPx*Math.pow(400/minPx,v/100);
   document.getElementById('zoom-sl').style.setProperty('--pct',v+'%');
   renderTL();
   _refreshWave();
+  if(sc)requestAnimationFrame(()=>{sc.scrollLeft=Math.max(0,centerMs/1000*pxS-sc.clientWidth/2);});
 }
 function syncZ(){
   const minPx=fitPxS();

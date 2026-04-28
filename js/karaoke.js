@@ -968,6 +968,15 @@ renderSL=function(){
       };
       el.appendChild(xb);
     }
+    if(s.adjust){
+      const ab=document.createElement('button');
+      ab.className='sl-k-btn sl-adj-btn'+(typeof adjustEditId!=='undefined'&&adjustEditId===s.id?' active':'');
+      ab.title='Edit Adjust';
+      ab.style.cssText='color:#5ac8fa;border-color:#5ac8fa;margin-left:2px;padding:0 3px';
+      ab.innerHTML='<svg width="11" height="9" viewBox="0 0 22 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 7 L7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="5 4 8 7 5 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M21 7 L15 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="17 4 14 7 17 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+      ab.onclick=e=>{e.stopPropagation();selId=s.id;multi.clear();if(typeof adjustEditId!=='undefined'&&adjustEditId===s.id){closeAdjustEditor();}else{openAdjustEditor(s.id);}};
+      el.appendChild(ab);
+    }
     body.appendChild(el);
   });
 };
@@ -1046,6 +1055,18 @@ renderBlocks=function(){
       });
       badgeRow.appendChild(rv);
     }
+    if(sub.adjust){
+      const ab=document.createElement('span');
+      ab.className='blk-adj'+(typeof adjustEditId!=='undefined'&&adjustEditId===sub.id?' active':'');
+      ab.title='Adjust — click to edit';
+      ab.innerHTML='<svg width="11" height="8" viewBox="0 0 22 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 7 L7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="5 4 8 7 5 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M21 7 L15 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="17 4 14 7 17 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+      ab.addEventListener('mousedown',e=>{e.stopPropagation();});
+      ab.addEventListener('click',e=>{
+        e.stopPropagation();selId=sub.id;multi.clear();
+        if(typeof adjustEditId!=='undefined'&&adjustEditId===sub.id){closeAdjustEditor();}else{openAdjustEditor(sub.id);}
+      });
+      badgeRow.appendChild(ab);
+    }
     if(badgeRow.children.length)el.appendChild(badgeRow);
     if(sub._compound&&sub._compound.length){
       const cb=document.createElement('span');
@@ -1061,7 +1082,7 @@ renderBlocks=function(){
     const rh=mk('div','rh r');rh.addEventListener('mousedown',e=>startRes(e,sub.id,'r'));
     el.prepend(lh);el.appendChild(rh);
     el.addEventListener('mousedown',e=>{
-      if(e.target.classList.contains('rh')||e.target.classList.contains('blk-k')||e.target.classList.contains('blk-m')||e.target.classList.contains('blk-mir'))return;
+      if(e.target.classList.contains('rh')||e.target.classList.contains('blk-k')||e.target.classList.contains('blk-m')||e.target.classList.contains('blk-mir')||e.target.classList.contains('blk-adj'))return;
       e.preventDefault();blockMouseDown(e,sub.id);
     });
     row.appendChild(el);

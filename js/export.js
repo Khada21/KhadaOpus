@@ -6,7 +6,7 @@ function openExport(){
   document.getElementById('exp-vtt').classList.remove('off');
   document.getElementById('exp-modal').classList.add('open');
 }
-function chkYttBool(){return subs.some(s=>{const st=s.style;return st.bold||st.italic||st.underline||st.textColor!=='#ffffff'||st.bgColor!=='#000000'||st.bgAlpha!==60||st.textAlpha!==100||st.font!=='Roboto'||st.fontSize!==100||(st.position&&st.position!==2)||st.shadowGlow||st.shadowBevel||st.shadowSoft||st.shadowHard||st.outlineType>0||st.outlineAlpha>0||s.track>0||hasMove(s)||hasKaraoke(s)||(s.styleKfs&&s.styleKfs.frames&&s.styleKfs.frames.length>0);});}
+function chkYttBool(){return subs.some(s=>{const st=s.style;return st.bold||st.italic||st.underline||st.textColor!=='#ffffff'||st.bgColor!=='#000000'||st.bgAlpha!==60||st.textAlpha!==100||st.font!=='Roboto'||st.fontSize!==100||(st.position&&st.position!==2)||st.shadowGlow||st.shadowBevel||st.shadowSoft||st.shadowHard||st.outlineType>0||st.outlineAlpha>0||s.track>0||hasMove(s)||hasKaraoke(s)||(s.styleKfs&&s.styleKfs.frames&&s.styleKfs.frames.length>0)||(typeof hasAdjust==='function'&&hasAdjust(s));});}
 function closeExport(){document.getElementById('exp-modal').classList.remove('open');}
 function doExport(fmt){
   // Expand compound blocks to their originals before exporting

@@ -182,6 +182,20 @@
                 <div class="fx-card-desc">Random position jitter</div>
               </div>
             </div>
+            <div class="fx-card" id="fx-adjust-card" draggable="true" title="Drag onto a subtitle block to add animated style transition">
+              <div class="fx-card-icon" style="color:#5ac8fa;background:rgba(90,200,250,.15);border-color:rgba(90,200,250,.4);padding:0">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 14 L11 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                  <polyline points="9 10 13 14 9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M24 14 L17 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                  <polyline points="19 10 15 14 19 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="fx-card-info">
+                <div class="fx-card-name">Adjust</div>
+                <div class="fx-card-desc">Animate size &amp; colors over time</div>
+              </div>
+            </div>
             <div class="fx-card" id="fx-tracker-card" draggable="true" title="Drag onto a subtitle block to auto-track an object in video">
               <div class="fx-card-icon" style="color:#9c27b0;background:rgba(156,39,176,.15);border-color:rgba(156,39,176,.4)">TR</div>
               <div class="fx-card-info">
@@ -659,6 +673,122 @@
         </div>
       </div>
 
+      <!-- Adjust Editor (hidden by default, replaces inspector when editing adjust) -->
+      <div id="adjust-editor" style="display:none;flex:1;min-height:120px;overflow:hidden;flex-direction:column;">
+        <div class="ke-hdr">
+          <span class="ke-hdr-title" style="color:#5ac8fa;display:flex;align-items:center;gap:6px">
+            <svg width="16" height="12" viewBox="0 0 22 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 7 L7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="5 4 8 7 5 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M21 7 L15 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="17 4 14 7 17 10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            Adjust Editor
+          </span>
+          <button class="ke-close" onclick="closeAdjustEditor()" title="Back to Inspector">✕</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px">
+          <!-- Timing -->
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Timing</div>
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">Start (ms)</span>
+                <input type="number" id="adj-start" min="0" value="0" oninput="adjSetTime('start',+this.value)" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;border-radius:2px;outline:none;text-align:center;width:100%"/>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">End (ms)</span>
+                <input type="number" id="adj-end" min="1" value="1000" oninput="adjSetTime('end',+this.value)" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;border-radius:2px;outline:none;text-align:center;width:100%"/>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">Easing</span>
+                <select id="adj-ease" onchange="adjSetEase(this.value)" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 5px;border-radius:2px;outline:none">
+                  <option value="linear">Linear</option>
+                  <option value="ease-in">Ease In</option>
+                  <option value="ease-out">Ease Out</option>
+                  <option value="ease-in-out">In + Out</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <!-- Properties -->
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Animate Properties <span style="color:var(--text3);font-weight:400;letter-spacing:0;text-transform:none">(base value editable → target)</span></div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <!-- Size -->
+              <div id="adj-size-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-size-chk" onchange="adjToggleProp('toSize',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Size %</span>
+                <input type="number" id="adj-size-from" value="100" min="10" max="300" oninput="adjSetBase('fontSize',+this.value)" title="Base value (editable)" style="width:46px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center;cursor:text"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="number" id="adj-size-to" value="200" min="10" max="300" oninput="adjSetProp('toSize',+this.value)" style="width:46px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center"/>
+              </div>
+              <!-- Text Color -->
+              <div id="adj-tc-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-tc-chk" onchange="adjToggleProp('toTextColor',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Text Color</span>
+                <input type="color" id="adj-tc-from" value="#ffffff" oninput="adjSetBase('textColor',this.value)" title="Base value (editable)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px;opacity:0.7"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="color" id="adj-tc-to" value="#ffffff" oninput="adjSetProp('toTextColor',this.value)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px"/>
+              </div>
+              <!-- Text Alpha -->
+              <div id="adj-ta-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-ta-chk" onchange="adjToggleProp('toTextAlpha',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Text Alpha</span>
+                <input type="number" id="adj-ta-from" value="100" min="0" max="100" oninput="adjSetBase('textAlpha',Math.max(0,Math.min(100,+this.value)))" title="Base value (editable)" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center;cursor:text"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="number" id="adj-ta-to" value="0" min="0" max="100" oninput="adjSetProp('toTextAlpha',Math.max(0,Math.min(100,+this.value)))" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center"/>
+                <span style="font-size:9px;color:var(--text3)">%</span>
+              </div>
+              <!-- BG Color -->
+              <div id="adj-bc-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-bc-chk" onchange="adjToggleProp('toBgColor',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">BG Color</span>
+                <input type="color" id="adj-bc-from" value="#000000" oninput="adjSetBase('bgColor',this.value)" title="Base value (editable)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px;opacity:0.7"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="color" id="adj-bc-to" value="#000000" oninput="adjSetProp('toBgColor',this.value)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px"/>
+              </div>
+              <!-- BG Alpha -->
+              <div id="adj-ba-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-ba-chk" onchange="adjToggleProp('toBgAlpha',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">BG Alpha</span>
+                <input type="number" id="adj-ba-from" value="60" min="0" max="100" oninput="adjSetBase('bgAlpha',Math.max(0,Math.min(100,+this.value)))" title="Base value (editable)" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center;cursor:text"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="number" id="adj-ba-to" value="0" min="0" max="100" oninput="adjSetProp('toBgAlpha',Math.max(0,Math.min(100,+this.value)))" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center"/>
+                <span style="font-size:9px;color:var(--text3)">%</span>
+              </div>
+              <!-- Outline Color -->
+              <div id="adj-oc-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-oc-chk" onchange="adjToggleProp('toOutlineColor',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Outline Color</span>
+                <input type="color" id="adj-oc-from" value="#000000" oninput="adjSetBase('outlineColor',this.value)" title="Base value (editable)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px;opacity:0.7"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="color" id="adj-oc-to" value="#000000" oninput="adjSetProp('toOutlineColor',this.value)" style="width:28px;height:22px;border:1px solid var(--border2);background:none;cursor:pointer;border-radius:2px;padding:1px"/>
+              </div>
+              <!-- Outline Alpha -->
+              <div id="adj-oa-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-oa-chk" onchange="adjToggleProp('toOutlineAlpha',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Outline Alpha</span>
+                <input type="number" id="adj-oa-from" value="0" min="0" max="100" oninput="adjSetBase('outlineAlpha',Math.max(0,Math.min(100,+this.value)))" title="Base value (editable)" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center;cursor:text"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="number" id="adj-oa-to" value="100" min="0" max="100" oninput="adjSetProp('toOutlineAlpha',Math.max(0,Math.min(100,+this.value)))" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center"/>
+                <span style="font-size:9px;color:var(--text3)">%</span>
+              </div>
+              <!-- Outline Size -->
+              <div id="adj-os-row" style="display:flex;align-items:center;gap:6px;opacity:0.4;transition:opacity .15s">
+                <input type="checkbox" id="adj-os-chk" onchange="adjToggleProp('toOutlineSize',this.checked)" style="cursor:pointer;accent-color:#5ac8fa"/>
+                <span style="font-size:10px;color:var(--text2);font-family:var(--mono);min-width:68px">Outline Size</span>
+                <input type="number" id="adj-os-from" value="3" min="1" max="20" oninput="adjSetBase('outlineSize',Math.max(1,Math.min(20,+this.value)))" title="Base value (editable)" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center;cursor:text"/>
+                <span style="font-size:10px;color:var(--text3)">→</span>
+                <input type="number" id="adj-os-to" value="8" min="1" max="20" oninput="adjSetProp('toOutlineSize',Math.max(1,Math.min(20,+this.value)))" style="width:40px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 4px;border-radius:2px;outline:none;text-align:center"/>
+                <span style="font-size:9px;color:var(--text3)">px</span>
+              </div>
+            </div>
+          </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.6;padding:8px;background:rgba(90,200,250,.07);border:1px solid rgba(90,200,250,.2);border-radius:2px">
+            <b style="color:#5ac8fa">Adjust</b> animates style properties over a time range — exported as 10fps stepped frames. Check a property, set a target value, and the subtitle transitions smoothly from its base style to that target.
+          </div>
+        </div>
+        <div style="padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0">
+          <button onclick="removeAdjustFromSub(subs.find(s=>s.id===adjustEditId))" style="width:100%;padding:6px;background:rgba(255,59,48,.07);border:1px solid rgba(255,59,48,.25);font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);cursor:pointer;transition:all .15s;border-radius:2px">✕ Remove Adjust</button>
+        </div>
+      </div>
+
       <!-- Reverse Editor (hidden by default) -->
       <div id="reverse-editor" style="display:none;flex:1;min-height:120px;overflow:hidden;flex-direction:column;">
         <div class="ke-hdr">
@@ -1114,6 +1244,7 @@ Try: <em>"delete all subtitle blocks"</em> · <em>"make selected subtitle do a c
 <script src="js/chroma.js"></script>
 <script src="js/fadeworks.js"></script>
 <script src="js/shake.js"></script>
+<script src="js/adjust.js"></script>
 <script src="js/tracker.js"></script>
 <script src="js/dragtool.js"></script>
 <script src="js/ai.js"></script>

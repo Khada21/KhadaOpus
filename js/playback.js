@@ -33,7 +33,7 @@ function _getBaseStyle(s,gi,kfOverrides,baseFontPx){
   if(baseFontPx==null)baseFontPx=16;
   const st=kfOverrides?{...s.style,...kfOverrides}:s.style;
   const oa=st.outlineAlpha??0;
-  const ot=st.outlineType??0;
+  const ot=st.outlineType>0?st.outlineType:(oa>0?3:0);
   const hasOutline=oa>0&&ot>0;
   const sz=st.outlineSize||3;
   const oc=st.outlineColor||'#000000';
@@ -87,7 +87,8 @@ function startRaf(){
     const x=ms2x(curMs);
     phEl.style.transform=`translateX(${x}px)`;
     if(_justSeeked){scEl&&(scEl.scrollLeft=Math.max(0,x-scEl.clientWidth/2));_justSeeked=false;}
-    else if(scEl&&x>scEl.scrollLeft+scEl.clientWidth*.8){scEl.scrollLeft=x-scEl.clientWidth*.2;}
+    else if(scEl&&x>scEl.scrollLeft+scEl.clientWidth*.9){scEl.scrollLeft=x-scEl.clientWidth*.35;}
+    else if(scEl&&x<scEl.scrollLeft){scEl.scrollLeft=Math.max(0,x-scEl.clientWidth*.1);}
 
     // ── Timecode (always) ──
     curTEl.textContent=msToDisp(curMs);
@@ -144,6 +145,12 @@ function _updOvFast(vwrap){
       const msRel=Math.max(0,Math.min(s.endMs-s.startMs,curMs-s.startMs));
       kfOverrides=getStyleKfAtMs(s,msRel);
       if(kfOverrides&&!Object.keys(kfOverrides).length)kfOverrides=null;
+    }
+    // Adjust effect overrides
+    if(typeof hasAdjust==='function'&&hasAdjust(s)){
+      const msRel=Math.max(0,Math.min(s.endMs-s.startMs,curMs-s.startMs));
+      const adjOv=getAdjustAtMs(s,msRel);
+      if(adjOv){kfOverrides=kfOverrides?{...kfOverrides,...adjOv}:adjOv;}
     }
     const st=kfOverrides?{...s.style,...kfOverrides}:s.style;
 
@@ -330,6 +337,19 @@ function _updOvFast(vwrap){
       const px=Math.max(1,Math.round(offset*0.5));
       const chrParts=inFlash?[`-${px}px 0 rgba(255,0,0,.55)`,`${px}px 0 rgba(0,0,255,.55)`]:[];
       el.style.textShadow=[...outParts,...chrParts].join(', ');
+    }
+
+    // ── Fade preview: time-based opacity ──
+    if(typeof hasFade==='function'&&hasFade(s)){
+      const f=s.fade;
+      const elapsed=Math.max(0,curMs-s.startMs);
+      const subDur=Math.max(1,s.endMs-s.startMs);
+      let fadeOp=1;
+      if(f.inMs>0&&elapsed<f.inMs)fadeOp=Math.max(0,elapsed/f.inMs);
+      else if(f.outMs>0&&elapsed>subDur-f.outMs)fadeOp=Math.max(0,(subDur-elapsed)/f.outMs);
+      el.style.opacity=fadeOp.toFixed(3);
+    }else{
+      el.style.opacity='';
     }
   });
 
