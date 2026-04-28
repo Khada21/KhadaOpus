@@ -19,7 +19,8 @@ const KB_DEFAULTS=[
   {id:'redo',      label:'Redo',                 desc:'Redo last undone action',       def:'ctrl+y'},
   {id:'next-block',label:'Next Block',           desc:'Select next subtitle',          def:'tab'},
   {id:'prev-block',label:'Previous Block',       desc:'Select previous subtitle',      def:'shift+tab'},
-  {id:'shortcuts', label:'Show Shortcuts',       desc:'Open this shortcuts panel',     def:'?'},
+  {id:'shortcuts',     label:'Show Shortcuts',       desc:'Open this shortcuts panel',          def:'?'},
+  {id:'reset-layout',  label:'Reset Layout',         desc:'Reset all panel sizes to default',   def:'`'},
 ];
 
 let keybinds={}; // id → key string
@@ -112,8 +113,8 @@ function renderKbModal(){
   const sections=[
     {title:'Playback',ids:['play','skip-back','skip-fwd','loop-block']},
     {title:'Editing',ids:['set-in','set-out','add','delete','undo','redo']},
-    {title:'Timeline',ids:['snap','magnet','drag-tool','next-block','prev-block']},
-    {title:'App',ids:['shortcuts']},
+    {title:'Timeline',ids:['snap','magnet','frame-snap','drag-tool','next-block','prev-block']},
+    {title:'App',ids:['shortcuts','reset-layout']},
   ];
   sections.forEach(sec=>{
     const secEl=document.createElement('div');
@@ -187,6 +188,7 @@ function onKey(e){
   else if(matches('drag-tool')){e.preventDefault();toggleDragTool();}
   else if(matches('delete')||k==='backspace'){if(selId||multi.size>0){e.preventDefault();deleteSel();}}
   else if(matches('shortcuts')){e.preventDefault();openKbModal();}
+  else if(matches('reset-layout')){e.preventDefault();resetLayout();}
   else if(matches('next-block')||matches('prev-block')){
     e.preventDefault();
     if(karaEditId){

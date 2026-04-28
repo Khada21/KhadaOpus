@@ -114,7 +114,7 @@ function _getDisplayText(sub){
 }
 
 function _updOvFast(vwrap){
-  const baseFontPx=Math.max(8,Math.round((vwrap.offsetHeight||360)*0.0444));
+  const baseFontPx=Math.max(6,Math.round((vwrap.offsetHeight||360)*0.033));
   const active=subs.filter(s=>curMs>=s.startMs&&curMs<=s.endMs);
   const activeIds=new Set(active.map(s=>s.id));
 

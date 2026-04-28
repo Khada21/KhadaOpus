@@ -74,7 +74,7 @@
 <!-- EDITOR -->
 <div id="editor">
   <div class="topbar">
-    <div class="topbar-logo"><span class="k">Khada</span> <span class="o">Opus</span></div>
+    <button class="tb-btn" onclick="showProjectsModal()" title="View all saved projects" style="font-weight:700;letter-spacing:.5px">✦ Projects</button>
     <div class="tb-sep"></div>
     <div class="topbar-title" id="topbar-title">—</div>
     <div id="save-status" style="font-family:var(--mono);font-size:10px;color:var(--green);opacity:0;transition:opacity .4s;white-space:nowrap">✦ Saved</div>
@@ -82,7 +82,6 @@
       <button class="tb-btn kb-btn" onclick="openHelpModal()" title="Manual — how to use Khada Opus">?</button>
       <button class="tb-btn kb-btn" onclick="openKbModal()" title="Keyboard shortcuts & keybind customization">⌨</button>
       <button class="tb-btn" onclick="addSubtitle()">+ Add</button>
-      <button class="tb-btn" onclick="showProjectsModal()" title="View all saved projects">✦ Projects</button>
       <button class="tb-btn" onclick="goHome()">↩ New</button>
       <input type="file" id="topbar-video-input" accept="video/*,audio/*" style="display:none" onchange="loadVideoMidSession(this.files[0]);this.value=''"/>
       <button class="tb-btn success" onclick="document.getElementById('topbar-video-input').click()" title="Load or swap the video without losing your subtitles">▶ Import Video</button>

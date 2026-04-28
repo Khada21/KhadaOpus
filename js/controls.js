@@ -1,3 +1,23 @@
+function resetLayout(){
+  // Restore inline-style defaults that were set in the HTML (clearing them would leave
+  // no value at all since CSS doesn't define widths/heights for these elements).
+  const el=id=>document.getElementById(id);
+  const rc=el('right-col'),lp=el('left-pane');
+  if(rc)rc.style.width='380px';
+  if(lp)lp.style.width='calc(100% - 380px)';
+  // Effects pane width is defined by CSS (155px), so just clear any inline override
+  const ep=el('effects-pane');if(ep)ep.style.width='';
+  // Video-area / timeline split
+  const ur=el('upper-row');
+  if(ur)ur.style.height='calc(100vh - 40px - 36px - 36px - 200px)';
+  // Inspector / subtitle-list split
+  const insp=el('inspector'),karaEd=el('kara-editor'),slp=el('sub-list-panel');
+  if(insp){insp.style.flex='1';insp.style.height='';}
+  if(karaEd)karaEd.style.height='';
+  if(slp)slp.style.height='calc((100vh - 40px) / 2)';
+  renderTL();
+}
+
 function toggleSnap(){
   snapEnabled=!snapEnabled;
   document.getElementById('btn-snap').classList.toggle('active',snapEnabled);

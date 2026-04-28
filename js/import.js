@@ -79,22 +79,32 @@ function _showImportWarn(filename,onConfirm){
 }
 
 function _srtTimeToMs(s){
-  const m=s.match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+  const m=s.trim().match(/(\d+):(\d+):(\d+)[,.](\d+)/);
   if(!m)return 0;
   return +m[1]*3600000 + +m[2]*60000 + +m[3]*1000 + +m[4].padEnd(3,'0').slice(0,3);
 }
 
+function _normLines(text){
+  // Strip BOM, normalize CRLF and bare CR to LF
+  return text.replace(/^﻿/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+}
+
 function _parseSRT(text){
+  text=_normLines(text);
   const result=[];
-  const blocks=text.trim().split(/\n[ \t]*\n/);
+  // Split on one or more blank lines (handles extra blank lines between blocks)
+  const blocks=text.trim().split(/\n[ \t]*\n+/);
   blocks.forEach(block=>{
     const lines=block.trim().split('\n');
     if(lines.length<2)return;
     const tl=lines.find(l=>l.includes('-->'));
     if(!tl)return;
     const[ss,es]=tl.split('-->').map(s=>s.trim());
-    const startMs=_srtTimeToMs(ss), endMs=_srtTimeToMs(es);
-    const txt=lines.slice(lines.indexOf(tl)+1).join(' ').replace(/<[^>]+>/g,'').trim();
+    const startMs=_srtTimeToMs(ss),endMs=_srtTimeToMs(es);
+    if(!startMs&&!endMs)return;
+    const tiIdx=lines.indexOf(tl);
+    // Preserve internal newlines (multi-line subtitles), strip HTML tags
+    const txt=lines.slice(tiIdx+1).join('\n').replace(/<[^>]+>/g,'').trim();
     if(!txt)return;
     result.push({id:uid(),startMs,endMs,text:txt,track:0,style:{...DS}});
   });
@@ -102,7 +112,9 @@ function _parseSRT(text){
 }
 
 function _parseVTT(text){
-  const cleaned=text.replace(/^WEBVTT[^\n]*/,'').replace(/^\d+\s*$/gm,'');
+  text=_normLines(text);
+  // Strip WEBVTT header and cue identifiers (bare numbers or word IDs before timestamps)
+  const cleaned=text.replace(/^WEBVTT[^\n]*/,'').replace(/^[^\n]*(?!\d{2}:\d{2})\S[^\n]*\n(?=\d{2}:\d{2}|\d+:\d{2})/gm,'').replace(/^\d+\s*$/gm,'');
   return _parseSRT(cleaned);
 }
 
